@@ -1,0 +1,144 @@
+# version removed — obsolete in modern Docker Compose
+
+services:
+  # ── PostgreSQL Database ──────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: mentor_postgres
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mentor -d mentordb']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mentor_net
+
+  # ── Redis Cache & Presence ───────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: mentor_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mentor_net
+
+  # ── LiveKit (Free Agora Alternative) ────────────────────────────────────
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: mentor_livekit
+    restart: unless-stopped
+    ports:
+      - '7880:7880'
+      - '7881:7881'
+      - '7882:7882/udp'
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+    command: --config /etc/livekit.yaml --dev
+    networks:
+      - mentor_net
+
+  # ── MinIO (Free S3-Compatible Storage) ──────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: mentor_minio
+    restart: unless-stopped
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    env_file: .env
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ':9001'
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mentor_net
+
+  # ── MinIO Bucket Init ────────────────────────────────────────────────────
+  minio-init:
+    image: minio/mc:latest
+    container_name: mentor_minio_init
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      /bin/sh -c "
+        sleep 5;
+        mc alias set myminio http://minio:9000 minioadmin minioadmin123;
+        mc mb --ignore-existing myminio/recordings;
+        mc anonymous set download myminio/recordings;
+        echo 'MinIO bucket created successfully';
+        exit 0;
+      "
+    networks:
+      - mentor_net
+
+  # ── Backend (Node.js + Express + TypeScript) ─────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mentor_backend
+    restart: unless-stopped
+    ports:
+      - '5000:5000'
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+    networks:
+      - mentor_net
+
+  # ── Frontend (React + TypeScript + Vite + Tailwind) ─────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mentor_frontend
+    restart: unless-stopped
+    ports:
+      - '5173:5173'
+    environment:
+      VITE_BACKEND_URL: http://localhost:5000
+      VITE_LIVEKIT_WS_URL: ws://localhost:7880
+      VITE_MINIO_PUBLIC_URL: http://localhost:9000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+    networks:
+      - mentor_net
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+
+networks:
+  mentor_net:
+    driver: bridge

@@ -1,0 +1,80 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String       @id @default(uuid())
+  name       String
+  email      String       @unique
+  password   String
+  role       Role         @default(STUDENT)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  attendance Attendance[]
+  questions  Question[]
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  MENTOR
+  STUDENT
+}
+
+model Session {
+  id             String        @id @default(uuid())
+  title          String
+  description    String?
+  scheduledAt    DateTime
+  startedAt      DateTime?
+  endedAt        DateTime?
+  livekitRoom    String        @unique
+  recordingUrl   String?
+  recordingEgressId String?
+  status         SessionStatus @default(SCHEDULED)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  attendance     Attendance[]
+  questions      Question[]
+
+  @@map("sessions")
+}
+
+enum SessionStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+}
+
+model Attendance {
+  id        String    @id @default(uuid())
+  userId    String
+  sessionId String
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session   Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sessionId])
+  @@map("attendance")
+}
+
+model Question {
+  id        String   @id @default(uuid())
+  text      String
+  answered  Boolean  @default(false)
+  userId    String
+  sessionId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("questions")
+}
