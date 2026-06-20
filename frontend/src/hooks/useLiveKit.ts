@@ -20,11 +20,15 @@ export interface LiveKitState {
   isMicEnabled: boolean;
   isCameraEnabled: boolean;
   isScreenSharing: boolean;
+  isNoiseCancellationEnabled: boolean;
   error: string | null;
 }
 
 export function useLiveKit() {
   const roomRef = useRef<Room | null>(null);
+  const rnnoiseProcessorRef = useRef<any>(null);
+  const isNoiseCancellationEnabledRef = useRef<boolean>(false);
+
   const [state, setState] = useState<LiveKitState>({
     room: null,
     localParticipant: null,
@@ -33,6 +37,7 @@ export function useLiveKit() {
     isMicEnabled: false,
     isCameraEnabled: false,
     isScreenSharing: false,
+    isNoiseCancellationEnabled: false,
     error: null,
   });
 
@@ -64,6 +69,7 @@ export function useLiveKit() {
             videoEncoding: VideoPresets.h720.encoding,
             screenShareEncoding: ScreenSharePresets.h1080fps30.encoding,
             videoSimulcastLayers: [
+              VideoPresets.h180,
               VideoPresets.h360,
               VideoPresets.h720,
             ],
@@ -76,14 +82,6 @@ export function useLiveKit() {
             autoGainControl: true,
             channelCount: 1,
             sampleRate: 48000,
-            // @ts-ignore
-            googNoiseSuppression: true,
-            // @ts-ignore
-            googEchoCancellation: true,
-            // @ts-ignore
-            googAutoGainControl: true,
-            // @ts-ignore
-            googHighpassFilter: true,
           },
         });
         roomRef.current = room;
@@ -129,7 +127,24 @@ export function useLiveKit() {
           syncParticipants();
         });
 
-        room.on(RoomEvent.LocalTrackPublished, syncParticipants);
+        room.on(RoomEvent.LocalTrackPublished, async (publication) => {
+          if (publication.track?.kind === Track.Kind.Audio) {
+            const audioTrack = publication.track;
+            if (isNoiseCancellationEnabledRef.current && audioTrack.setProcessor) {
+              try {
+                if (!rnnoiseProcessorRef.current) {
+                  const { DenoiseTrackProcessor } = await import('livekit-rnnoise-processor');
+                  rnnoiseProcessorRef.current = new DenoiseTrackProcessor();
+                }
+                await audioTrack.setProcessor(rnnoiseProcessorRef.current);
+                console.log('🎙️ RNNoise processor applied to newly published audio track.');
+              } catch (e) {
+                console.error('Failed to set RNNoise processor on new track:', e);
+              }
+            }
+          }
+          syncParticipants();
+        });
         room.on(RoomEvent.LocalTrackUnpublished, syncParticipants);
         room.on(RoomEvent.Disconnected, () => {
           setState((prev) => ({
@@ -168,9 +183,14 @@ export function useLiveKit() {
 
   const disconnect = useCallback(async () => {
     if (roomRef.current) {
+      const localAudioTrack = roomRef.current.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as any;
+      if (localAudioTrack && localAudioTrack.stopProcessor) {
+        await localAudioTrack.stopProcessor().catch(console.error);
+      }
       await roomRef.current.disconnect();
       roomRef.current = null;
     }
+    rnnoiseProcessorRef.current = null;
     setState({
       room: null,
       localParticipant: null,
@@ -179,6 +199,7 @@ export function useLiveKit() {
       isMicEnabled: false,
       isCameraEnabled: false,
       isScreenSharing: false,
+      isNoiseCancellationEnabled: isNoiseCancellationEnabledRef.current,
       error: null,
     });
   }, []);
@@ -216,10 +237,43 @@ export function useLiveKit() {
     }));
   }, [state.isScreenSharing]);
 
+  const setNoiseCancellationEnabled = useCallback(async (enabled: boolean) => {
+    isNoiseCancellationEnabledRef.current = enabled;
+    setState((prev) => ({ ...prev, isNoiseCancellationEnabled: enabled }));
+
+    if (roomRef.current) {
+      const localAudioTrack = roomRef.current.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as any;
+      if (localAudioTrack && localAudioTrack.setProcessor) {
+        try {
+          if (enabled) {
+            if (!rnnoiseProcessorRef.current) {
+              const { DenoiseTrackProcessor } = await import('livekit-rnnoise-processor');
+              rnnoiseProcessorRef.current = new DenoiseTrackProcessor();
+            }
+            await localAudioTrack.setProcessor(rnnoiseProcessorRef.current);
+            console.log('🎙️ RNNoise processor applied dynamically.');
+          } else {
+            await localAudioTrack.stopProcessor();
+            console.log('🎙️ RNNoise processor stopped dynamically.');
+          }
+        } catch (e) {
+          console.error('Failed to update RNNoise processor state:', e);
+        }
+      }
+    }
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      roomRef.current?.disconnect();
+      if (roomRef.current) {
+        const localAudioTrack = roomRef.current.localParticipant.getTrackPublication(Track.Source.Microphone)?.track as any;
+        if (localAudioTrack && localAudioTrack.stopProcessor) {
+          localAudioTrack.stopProcessor().catch(console.error);
+        }
+        roomRef.current.disconnect();
+      }
+      rnnoiseProcessorRef.current = null;
     };
   }, []);
 
@@ -231,6 +285,7 @@ export function useLiveKit() {
     setMicEnabled,
     toggleCamera,
     toggleScreenShare,
+    setNoiseCancellationEnabled,
     startAudio: () => roomRef.current?.startAudio(),
   };
 }

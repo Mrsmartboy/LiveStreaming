@@ -13,6 +13,7 @@
     "axios": "^1.7.2",
     "hls.js": "^1.6.16",
     "livekit-client": "^2.5.7",
+    "livekit-rnnoise-processor": "^2.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-redux": "^9.1.2",

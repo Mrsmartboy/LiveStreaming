@@ -44,11 +44,6 @@ export function useRecording({ sessionId, room, onUploadComplete, onError }: Use
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            // @ts-ignore
-            googNoiseSuppression: true,
-            googEchoCancellation: true,
-            googAutoGainControl: true,
-            googHighpassFilter: true,
           },
         });
         micStreamRef.current = micStream;

@@ -465,9 +465,25 @@ export default function LiveSession() {
        livekit.remoteParticipants[0] ??
        null);
 
-  const isScreenSharing = isMentor
-    ? livekit.isScreenSharing
-    : !!mentorParticipant?.getTrackPublication(Track.Source.ScreenShare)?.track;
+  // Find if anyone (including local or remote) is sharing screen
+  const screenShareParticipant = (() => {
+    if (!livekit.room) return null;
+    
+    // Check local participant first
+    if (livekit.room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track) {
+      return livekit.room.localParticipant;
+    }
+    
+    // Check remote participants
+    for (const p of livekit.remoteParticipants) {
+      if (p.getTrackPublication(Track.Source.ScreenShare)?.track) {
+        return p;
+      }
+    }
+    return null;
+  })();
+
+  const isScreenSharing = !!screenShareParticipant;
 
   const addNotif = useCallback((text: string, type: 'info' | 'warn' | 'success' = 'info') => {
     const id = ++notifId.current;
@@ -647,6 +663,12 @@ export default function LiveSession() {
                 className={`p-2 rounded-xl border transition-all ${livekit.isMicEnabled ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-red-500/20 border-red-500/40 text-red-400'}`}>
                 <MicIcon muted={!livekit.isMicEnabled} />
               </button>
+              {/* AI Noise Cancellation */}
+              <button onClick={() => livekit.setNoiseCancellationEnabled(!livekit.isNoiseCancellationEnabled)}
+                title={livekit.isNoiseCancellationEnabled ? 'Disable AI Noise Cancellation' : 'Enable AI Noise Cancellation'}
+                className={`p-2 rounded-xl border transition-all ${livekit.isNoiseCancellationEnabled ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}>
+                <SparklesIcon active={livekit.isNoiseCancellationEnabled} />
+              </button>
               {/* Camera */}
               <button onClick={livekit.toggleCamera} title={livekit.isCameraEnabled ? 'Stop Camera' : 'Start Camera'}
                 className={`p-2 rounded-xl border transition-all ${livekit.isCameraEnabled ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-red-500/20 border-red-500/40 text-red-400'}`}>
@@ -704,10 +726,23 @@ export default function LiveSession() {
                 title={!isUnmuted ? 'Raise hand to speak' : livekit.isMicEnabled ? 'Mute' : 'Unmute'}>
                 <MicIcon muted={!livekit.isMicEnabled || !isUnmuted} />
               </button>
+              {/* Student: AI Noise Cancellation (only if unmuted/speaking) */}
+              {isUnmuted && (
+                <button onClick={() => livekit.setNoiseCancellationEnabled(!livekit.isNoiseCancellationEnabled)}
+                  title={livekit.isNoiseCancellationEnabled ? 'Disable AI Noise Cancellation' : 'Enable AI Noise Cancellation'}
+                  className={`p-2 rounded-xl border transition-all ${livekit.isNoiseCancellationEnabled ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}>
+                  <SparklesIcon active={livekit.isNoiseCancellationEnabled} />
+                </button>
+              )}
               {/* Student: camera */}
               <button onClick={livekit.toggleCamera} title={livekit.isCameraEnabled ? 'Stop Camera' : 'Start Camera'}
                 className={`p-2 rounded-xl border transition-all ${livekit.isCameraEnabled ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-red-500/20 border-red-500/40 text-red-400'}`}>
                 <CamIcon off={!livekit.isCameraEnabled} />
+              </button>
+              {/* Student: screen share */}
+              <button onClick={livekit.toggleScreenShare} title="Screen Share"
+                className={`p-2 rounded-xl border transition-all hidden sm:flex ${livekit.isScreenSharing ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                <ScreenIcon />
               </button>
               {/* Leave */}
               <button onClick={handleLeave} className="text-xs font-semibold px-3 py-2 rounded-xl border border-slate-700 text-slate-400 hover:text-red-400 hover:border-red-500/40 transition-all">
@@ -751,7 +786,8 @@ export default function LiveSession() {
             <MentorLayout
               localParticipant={livekit.localParticipant}
               remoteParticipants={livekit.remoteParticipants}
-              isScreenSharing={livekit.isScreenSharing}
+              isScreenSharing={isScreenSharing}
+              screenShareParticipant={screenShareParticipant}
               onForceMute={handleForceMute}
             />
           ) : (
@@ -760,6 +796,7 @@ export default function LiveSession() {
               localParticipant={livekit.localParticipant}
               mentorParticipant={mentorParticipant as RemoteParticipant | null}
               isScreenSharing={isScreenSharing}
+              screenShareParticipant={screenShareParticipant}
               userName={user?.name || 'You'}
             />
           )}
@@ -827,20 +864,27 @@ function MentorLayout({
   localParticipant,
   remoteParticipants,
   isScreenSharing,
+  screenShareParticipant,
   onForceMute,
 }: {
   localParticipant: LocalParticipant | null;
   remoteParticipants: RemoteParticipant[];
   isScreenSharing: boolean;
+  screenShareParticipant: Participant | null;
   onForceMute: (id: string) => void;
 }) {
   return (
     <div className="relative w-full h-full">
       {/* Main area: screen share or student grid */}
-      {isScreenSharing ? (
+      {isScreenSharing && screenShareParticipant ? (
         // Screen share is main stage
         <div className="w-full h-full">
-          {localParticipant && <MainVideo participant={localParticipant} isLocal useScreen label="Your Screen" />}
+          <MainVideo
+            participant={screenShareParticipant}
+            isLocal={screenShareParticipant === localParticipant}
+            useScreen
+            label={screenShareParticipant === localParticipant ? 'Your Screen' : `${screenShareParticipant.name || 'Student'}'s Screen`}
+          />
         </div>
       ) : (
         // Student grid
@@ -883,22 +927,31 @@ function StudentLayout({
   localParticipant,
   mentorParticipant,
   isScreenSharing,
+  screenShareParticipant,
   userName,
 }: {
   localParticipant: LocalParticipant | null;
   mentorParticipant: RemoteParticipant | null;
   isScreenSharing: boolean;
+  screenShareParticipant: Participant | null;
   userName: string;
 }) {
   return (
     <div className="relative w-full h-full">
-      {/* Main stage: mentor camera or screen share */}
+      {/* Main stage: active screen share or mentor camera */}
       <div className="w-full h-full">
-        {mentorParticipant ? (
+        {screenShareParticipant ? (
+          <MainVideo
+            participant={screenShareParticipant}
+            isLocal={screenShareParticipant === localParticipant}
+            useScreen
+            label={screenShareParticipant === localParticipant ? 'Your Screen' : `${screenShareParticipant.name || 'Participant'}'s Screen`}
+          />
+        ) : mentorParticipant ? (
           <MainVideo
             participant={mentorParticipant}
-            useScreen={isScreenSharing}
-            label={isScreenSharing ? 'Mentor Screen' : (mentorParticipant.name || 'Mentor')}
+            useScreen={false}
+            label={mentorParticipant.name || 'Mentor'}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-slate-500">
@@ -984,6 +1037,14 @@ function ScreenIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function SparklesIcon({ active }: { active: boolean }) {
+  return (
+    <svg className={`w-4 h-4 transition-colors ${active ? 'text-emerald-400' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
     </svg>
   );
 }
