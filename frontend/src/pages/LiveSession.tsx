@@ -407,6 +407,32 @@ export default function LiveSession() {
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [isUnmuted, setIsUnmuted] = useState(false); // student approved to speak
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch((err) => {
+        console.error('Error entering fullscreen:', err);
+      });
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      }).catch((err) => {
+        console.error('Error exiting fullscreen:', err);
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   const livekit = useLiveKit();
   const isConnected = livekit.connectionState === ConnectionState.Connected;
 
@@ -689,6 +715,23 @@ export default function LiveSession() {
               </button>
             </>
           )}
+
+          {/* Fullscreen Toggle */}
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+            className="p-2 rounded-xl border transition-all bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700"
+          >
+            {isFullscreen ? (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 14h6v6m0-6l-7 7m16-7h-6v6m0-6l7 7M9 9V3M9 9H3M9 9L2 2" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
 
@@ -722,11 +765,11 @@ export default function LiveSession() {
           )}
         </div>
 
-        {/* Side Panel */}
-        <div className="w-72 flex-shrink-0 border-l border-slate-800 flex flex-col">
-          {/* Tabs */}
-          <div className="flex border-b border-slate-800 flex-shrink-0">
-            {isMentor && (
+        {/* Side Panel (Mentor only) */}
+        {isMentor && (
+          <div className="w-72 flex-shrink-0 border-l border-slate-800 flex flex-col">
+            {/* Tabs */}
+            <div className="flex border-b border-slate-800 flex-shrink-0">
               <TabButton active={sidePanel === 'hands'} onClick={() => setSidePanel('hands')}>
                 Hands {raisedHands.length > 0 && (
                   <span className="ml-1 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
@@ -734,34 +777,32 @@ export default function LiveSession() {
                   </span>
                 )}
               </TabButton>
-            )}
-            {isMentor && (
               <TabButton active={sidePanel === 'attendance'} onClick={() => setSidePanel('attendance')}>
                 People
               </TabButton>
-            )}
-          </div>
+            </div>
 
-          {/* Panel Content */}
-          <div className="flex-1 overflow-hidden">
-            {sidePanel === 'hands' && isMentor && (
-              <HandRaiseQueue
-                hands={raisedHands}
-                onApprove={socket.approveUnmute}
-                onDeny={socket.denyUnmute}
-              />
-            )}
-            {sidePanel === 'attendance' && isMentor && (
-              <AttendanceList
-                sessionId={sessionId!}
-                onlineCount={onlineCount}
-                remoteParticipants={livekit.remoteParticipants}
-                onForceMute={socket.forceMute}
-                onApproveUnmute={socket.approveUnmute}
-              />
-            )}
+            {/* Panel Content */}
+            <div className="flex-1 overflow-hidden">
+              {sidePanel === 'hands' && (
+                <HandRaiseQueue
+                  hands={raisedHands}
+                  onApprove={socket.approveUnmute}
+                  onDeny={socket.denyUnmute}
+                />
+              )}
+              {sidePanel === 'attendance' && (
+                <AttendanceList
+                  sessionId={sessionId!}
+                  onlineCount={onlineCount}
+                  remoteParticipants={livekit.remoteParticipants}
+                  onForceMute={socket.forceMute}
+                  onApproveUnmute={socket.approveUnmute}
+                />
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ── Toast Notifications ──────────────────────────────────────────── */}
