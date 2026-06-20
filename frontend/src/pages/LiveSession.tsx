@@ -870,9 +870,9 @@ function StudentLayout({
         )}
       </div>
 
-      {/* If screen sharing AND mentor cam is available, show mentor cam as extra PiP */}
+      {/* If screen sharing AND mentor cam is available, show mentor cam as extra PiP at bottom-right */}
       {isScreenSharing && mentorParticipant && mentorParticipant.isCameraEnabled && (
-        <div className="absolute top-4 left-4 z-20">
+        <div className="absolute bottom-4 right-4 z-20">
           <CircleVideo
             participant={mentorParticipant}
             label={mentorParticipant.name || 'Mentor'}
@@ -881,9 +881,13 @@ function StudentLayout({
         </div>
       )}
 
-      {/* Student self-cam: small circle, bottom-right */}
+      {/* Student self-cam: small circle, bottom-left (if screen sharing and mentor cam is in bottom-right) or bottom-right (otherwise) */}
       {localParticipant && (
-        <div className="absolute bottom-4 right-4 z-20">
+        <div className={`absolute z-20 ${
+          isScreenSharing && mentorParticipant && mentorParticipant.isCameraEnabled
+            ? 'bottom-4 left-4'
+            : 'bottom-4 right-4'
+        }`}>
           <CircleVideo
             participant={localParticipant}
             isLocal
