@@ -112,7 +112,8 @@ export const transcodeWorker = new Worker(
       console.log(`⏱️ Estimated duration: ${duration}s (probe=${probe.duration}s, session=${sessionDuration}s)`);
 
       // 3. Build FFmpeg options based on what streams are available
-      const outputOptions: string[] = ['-preset veryfast', '-g 48', '-sc_threshold 0'];
+      // -g 60 together with -r 30 ensures a keyframe exactly every 2 seconds
+      const outputOptions: string[] = ['-preset veryfast', '-r 30', '-g 60', '-sc_threshold 0'];
 
       if (probe.hasVideo) {
         // Multi-resolution video + optional audio
@@ -121,10 +122,10 @@ export const transcodeWorker = new Worker(
           '-map 0:v:0', '-map 0:a:0?',
           '-map 0:v:0', '-map 0:a:0?',
           '-map 0:v:0', '-map 0:a:0?',
-          '-s:v:0 256x144',  '-c:v:0 libx264', '-b:v:0 200k',
-          '-s:v:1 640x360',  '-c:v:1 libx264', '-b:v:1 800k',
-          '-s:v:2 1280x720', '-c:v:2 libx264', '-b:v:2 2500k',
-          '-s:v:3 1920x1080', '-c:v:3 libx264', '-b:v:3 4500k',
+          '-s:v:0 256x144',  '-c:v:0 libx264', '-b:v:0 100k',
+          '-s:v:1 640x360',  '-c:v:1 libx264', '-b:v:1 500k',
+          '-s:v:2 1280x720', '-c:v:2 libx264', '-b:v:2 1200k',
+          '-s:v:3 1920x1080', '-c:v:3 libx264', '-b:v:3 2200k',
         );
 
         if (probe.hasAudio) {
