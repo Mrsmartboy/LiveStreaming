@@ -407,17 +407,18 @@ export default function LiveSession() {
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [isUnmuted, setIsUnmuted] = useState(false); // student approved to speak
 
+  const livekit = useLiveKit();
+  const isConnected = livekit.connectionState === ConnectionState.Connected;
+
   // Recording
   const recording = useRecording({
     sessionId: sessionId || '',
+    room: livekit.room,
     onUploadComplete: (url) => addNotif(url ? '✅ Recording saved to storage' : '✅ Recording downloaded', 'success'),
     onError: (msg) => addNotif(msg, 'warn'),
   });
 
   const notifId = useRef(0);
-
-  const livekit = useLiveKit();
-  const isConnected = livekit.connectionState === ConnectionState.Connected;
 
   // Helper to check if participant is mentor using role metadata
   const isParticipantMentor = (p: Participant | null) => {

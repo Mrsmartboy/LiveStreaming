@@ -1,12 +1,14 @@
 import { useRef, useState, useCallback } from 'react';
+import { Room, RoomEvent } from 'livekit-client';
 
 interface UseRecordingOptions {
   sessionId: string;
+  room: Room | null;
   onUploadComplete?: (url: string) => void;
   onError?: (msg: string) => void;
 }
 
-export function useRecording({ sessionId, onUploadComplete, onError }: UseRecordingOptions) {
+export function useRecording({ sessionId, room, onUploadComplete, onError }: UseRecordingOptions) {
   const [isRecording, setIsRecording] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -61,6 +63,47 @@ export function useRecording({ sessionId, onUploadComplete, onError }: UseRecord
         micSource.connect(dest);
       }
 
+      // Connect all remote audio tracks from the LiveKit room if available
+      const remoteSources = new Map<string, MediaStreamAudioSourceNode>();
+
+      const handleRemoteTrackSubscribed = (track: any, publication: any) => {
+        if (track.kind === 'audio' && track.mediaStreamTrack) {
+          const source = audioContext.createMediaStreamSource(new MediaStream([track.mediaStreamTrack]));
+          source.connect(dest);
+          remoteSources.set(publication.trackSid, source);
+          console.log(`🎙️ Mixed remote audio track: ${publication.trackSid}`);
+        }
+      };
+
+      const handleRemoteTrackUnsubscribed = (track: any, publication: any) => {
+        if (track.kind === 'audio') {
+          const source = remoteSources.get(publication.trackSid);
+          if (source) {
+            source.disconnect();
+            remoteSources.delete(publication.trackSid);
+            console.log(`🎙️ Disconnected remote audio track: ${publication.trackSid}`);
+          }
+        }
+      };
+
+      if (room) {
+        // Mix existing remote audio tracks
+        room.remoteParticipants.forEach((participant) => {
+          participant.trackPublications.forEach((pub) => {
+            if (pub.track && pub.kind === 'audio' && pub.track.mediaStreamTrack) {
+              const source = audioContext.createMediaStreamSource(new MediaStream([pub.track.mediaStreamTrack]));
+              source.connect(dest);
+              remoteSources.set(pub.trackSid, source);
+              console.log(`🎙️ Mixed existing remote audio track: ${pub.trackSid}`);
+            }
+          });
+        });
+
+        // Listen for new ones
+        room.on(RoomEvent.TrackSubscribed, handleRemoteTrackSubscribed);
+        room.on(RoomEvent.TrackUnsubscribed, handleRemoteTrackUnsubscribed);
+      }
+
       // 4. Combine screen video with mixed audio
       const mixedStream = new MediaStream();
       mixedStream.addTrack(screenStream.getVideoTracks()[0]);
@@ -93,6 +136,14 @@ export function useRecording({ sessionId, onUploadComplete, onError }: UseRecord
       };
 
       recorder.onstop = async () => {
+        // Unregister LiveKit events
+        if (room) {
+          room.off(RoomEvent.TrackSubscribed, handleRemoteTrackSubscribed);
+          room.off(RoomEvent.TrackUnsubscribed, handleRemoteTrackUnsubscribed);
+        }
+        remoteSources.forEach((source) => source.disconnect());
+        remoteSources.clear();
+
         // Cleanup screen stream tracks
         screenStreamRef.current?.getTracks().forEach((t) => t.stop());
         screenStreamRef.current = null;
@@ -163,7 +214,7 @@ export function useRecording({ sessionId, onUploadComplete, onError }: UseRecord
         onError?.(`Failed to start recording: ${err.message}`);
       }
     }
-  }, [sessionId, onUploadComplete, onError]);
+  }, [sessionId, room, onUploadComplete, onError]);
 
   const stop = useCallback(() => {
     recorderRef.current?.stop();
