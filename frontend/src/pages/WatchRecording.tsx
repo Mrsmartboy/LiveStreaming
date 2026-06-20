@@ -37,6 +37,11 @@ export default function WatchRecording() {
         const hls = new Hls({
           startLevel: -1, // auto
           capLevelToPlayerSize: true,
+          enableWorker: true,
+          lowLatencyMode: false,
+          abrEwmaDefaultEstimate: 800000, // Starts at ~360p bandwidth estimate to avoid initial 1080p spikes
+          maxBufferLength: 15,            // Buffer 15 seconds ahead of playhead
+          maxMaxBufferLength: 30,         // Keep max 30 seconds buffered
         });
         hlsRef.current = hls;
 
