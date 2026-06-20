@@ -29,20 +29,21 @@ enum Role {
 }
 
 model Session {
-  id             String        @id @default(uuid())
-  title          String
-  description    String?
-  scheduledAt    DateTime
-  startedAt      DateTime?
-  endedAt        DateTime?
-  livekitRoom    String        @unique
-  recordingUrl   String?
+  id                String        @id @default(uuid())
+  title             String
+  description       String?
+  scheduledAt       DateTime
+  startedAt         DateTime?
+  endedAt           DateTime?
+  livekitRoom       String        @unique
+  recordingUrl      String?
   recordingEgressId String?
-  status         SessionStatus @default(SCHEDULED)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  attendance     Attendance[]
-  questions      Question[]
+  hlsUrl            String?
+  status            SessionStatus @default(SCHEDULED)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  attendance        Attendance[]
+  questions         Question[]
 
   @@map("sessions")
 }

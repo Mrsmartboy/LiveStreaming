@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import api from '../services/api';
 
-interface Student {
+interface UserAccount {
   id: string;
   name: string;
   email: string;
@@ -12,40 +12,43 @@ interface Student {
 }
 
 export default function AdminPanel() {
-  const [students, setStudents] = useState<Student[]>([]);
+  const [users, setUsers] = useState<UserAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [creating, setCreating] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'STUDENT' | 'MENTOR'>('STUDENT');
 
-  const loadStudents = async () => {
+  const loadUsers = async () => {
     setIsLoading(true);
     try {
-      const { data } = await api.get<Student[]>('/auth/students');
-      setStudents(data);
+      const endpoint = activeTab === 'STUDENT' ? '/auth/students' : '/auth/mentors';
+      const { data } = await api.get<UserAccount[]>(endpoint);
+      setUsers(data);
     } catch {
-      setMsg({ type: 'error', text: 'Failed to load students' });
+      setMsg({ type: 'error', text: `Failed to load ${activeTab.toLowerCase()}s` });
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadStudents();
-  }, []);
+    loadUsers();
+  }, [activeTab]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
     setMsg(null);
     try {
-      await api.post('/auth/create-student', form);
+      const endpoint = activeTab === 'STUDENT' ? '/auth/create-student' : '/auth/create-mentor';
+      await api.post(endpoint, form);
       setMsg({ type: 'success', text: `Account created for ${form.email}` });
       setForm({ name: '', email: '', password: '' });
       setShowForm(false);
-      await loadStudents();
+      await loadUsers();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       setMsg({ type: 'error', text: error.response?.data?.error || 'Failed to create account' });
@@ -57,18 +60,19 @@ export default function AdminPanel() {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete ${name}'s account? This cannot be undone.`)) return;
     try {
-      await api.delete(`/auth/students/${id}`);
-      setStudents((prev) => prev.filter((s) => s.id !== id));
+      const endpoint = activeTab === 'STUDENT' ? `/auth/students/${id}` : `/auth/mentors/${id}`;
+      await api.delete(endpoint);
+      setUsers((prev) => prev.filter((u) => u.id !== id));
       setMsg({ type: 'success', text: `${name}'s account deleted` });
     } catch {
-      setMsg({ type: 'error', text: 'Failed to delete student' });
+      setMsg({ type: 'error', text: 'Failed to delete account' });
     }
   };
 
-  const filtered = students.filter(
-    (s) =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.email.toLowerCase().includes(search.toLowerCase())
+  const filtered = users.filter(
+    (u) =>
+      u.name.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -79,13 +83,37 @@ export default function AdminPanel() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 animate-fade-in">
           <div>
             <h1 className="page-title">Admin Panel</h1>
-            <p className="text-slate-400 mt-1">Manage student accounts</p>
+            <p className="text-slate-400 mt-1">Manage accounts</p>
           </div>
           <button onClick={() => setShowForm(!showForm)} className="btn-brand flex items-center gap-2 self-start">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-            Add Student
+            Add {activeTab === 'STUDENT' ? 'Student' : 'Mentor'}
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-4 border-b border-slate-800 mb-6 mt-4">
+          <button
+            onClick={() => setActiveTab('STUDENT')}
+            className={`pb-3 px-2 text-sm font-medium transition-colors ${
+              activeTab === 'STUDENT'
+                ? 'text-indigo-400 border-b-2 border-indigo-400'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Students
+          </button>
+          <button
+            onClick={() => setActiveTab('MENTOR')}
+            className={`pb-3 px-2 text-sm font-medium transition-colors ${
+              activeTab === 'MENTOR'
+                ? 'text-indigo-400 border-b-2 border-indigo-400'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Mentors
           </button>
         </div>
 
@@ -108,7 +136,7 @@ export default function AdminPanel() {
         {/* Create Form */}
         {showForm && (
           <div className="card mb-8 animate-slide-up">
-            <h2 className="text-lg font-semibold text-white mb-4">Create Student Account</h2>
+            <h2 className="text-lg font-semibold text-white mb-4">Create {activeTab === 'STUDENT' ? 'Student' : 'Mentor'} Account</h2>
             <form onSubmit={handleCreate} className="grid sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">Full Name</label>
@@ -160,7 +188,7 @@ export default function AdminPanel() {
         <div className="card animate-fade-in">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-white">
-              Students <span className="text-slate-500 font-normal text-sm">({filtered.length})</span>
+              {activeTab === 'STUDENT' ? 'Students' : 'Mentors'} <span className="text-slate-500 font-normal text-sm">({filtered.length})</span>
             </h2>
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -182,14 +210,14 @@ export default function AdminPanel() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-slate-500">
-              {search ? 'No students match your search' : 'No students yet. Create one above.'}
+              {search ? 'No accounts match your search' : `No ${activeTab.toLowerCase()}s yet. Create one above.`}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-800">
-                    <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider pb-3">Student</th>
+                    <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider pb-3">{activeTab === 'STUDENT' ? 'Student' : 'Mentor'}</th>
                     <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider pb-3 hidden sm:table-cell">Sessions</th>
                     <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider pb-3 hidden sm:table-cell">Questions</th>
                     <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider pb-3 hidden md:table-cell">Joined</th>
@@ -197,35 +225,35 @@ export default function AdminPanel() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {filtered.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-800/30 transition-colors group">
+                  {filtered.map((u) => (
+                    <tr key={u.id} className="hover:bg-slate-800/30 transition-colors group">
                       <td className="py-3.5 pr-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500/30 to-violet-500/30 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
                             <span className="text-sm font-bold text-indigo-400">
-                              {s.name.charAt(0).toUpperCase()}
+                              {u.name.charAt(0).toUpperCase()}
                             </span>
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-white">{s.name}</p>
-                            <p className="text-xs text-slate-500">{s.email}</p>
+                            <p className="text-sm font-medium text-white">{u.name}</p>
+                            <p className="text-xs text-slate-500">{u.email}</p>
                           </div>
                         </div>
                       </td>
                       <td className="py-3.5 hidden sm:table-cell">
-                        <span className="text-sm text-slate-300">{s._count.attendance}</span>
+                        <span className="text-sm text-slate-300">{u._count.attendance}</span>
                       </td>
                       <td className="py-3.5 hidden sm:table-cell">
-                        <span className="text-sm text-slate-300">{s._count.questions}</span>
+                        <span className="text-sm text-slate-300">{u._count.questions}</span>
                       </td>
                       <td className="py-3.5 hidden md:table-cell">
                         <span className="text-xs text-slate-500">
-                          {new Date(s.createdAt).toLocaleDateString()}
+                          {new Date(u.createdAt).toLocaleDateString()}
                         </span>
                       </td>
                       <td className="py-3.5 text-right">
                         <button
-                          onClick={() => handleDelete(s.id, s.name)}
+                          onClick={() => handleDelete(u.id, u.name)}
                           className="opacity-0 group-hover:opacity-100 btn-danger text-xs py-1.5 px-2.5 transition-opacity"
                         >
                           Delete

@@ -1,0 +1,20 @@
+FROM node:20-alpine
+
+# Install OpenSSL (required by Prisma on Alpine) and ffmpeg
+RUN apk add --no-cache openssl ffmpeg
+
+WORKDIR /app
+
+# Install dependencies first (layer caching)
+COPY package*.json ./
+RUN npm install
+
+# Copy prisma schema and generate client
+COPY src/prisma ./src/prisma
+RUN npx prisma generate --schema=src/prisma/schema.prisma
+
+# Copy all source
+COPY . .
+
+# Start transcode worker
+CMD sh -c "npx prisma generate --schema=src/prisma/schema.prisma && npx ts-node -r dotenv/config ./src/worker.ts"

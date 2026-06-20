@@ -37,20 +37,7 @@ services:
     networks:
       - mentor_net
 
-  # ── LiveKit (Free Agora Alternative) ────────────────────────────────────
-  livekit:
-    image: livekit/livekit-server:latest
-    container_name: mentor_livekit
-    restart: unless-stopped
-    ports:
-      - '7880:7880'
-      - '7881:7881'
-      - '7882:7882/udp'
-    volumes:
-      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
-    command: --config /etc/livekit.yaml --dev
-    networks:
-      - mentor_net
+
 
   # ── MinIO (Free S3-Compatible Storage) ──────────────────────────────────
   minio:
@@ -122,12 +109,30 @@ services:
       - '5173:5173'
     environment:
       VITE_BACKEND_URL: http://localhost:5000
-      VITE_LIVEKIT_WS_URL: ws://localhost:7880
+      VITE_LIVEKIT_WS_URL: wss://mock-interview-98y90vi7.livekit.cloud
       VITE_MINIO_PUBLIC_URL: http://localhost:9000
     depends_on:
       - backend
     volumes:
       - ./frontend/src:/app/src
+    networks:
+      - mentor_net
+
+  # ── Transcode Worker (FFmpeg + BullMQ) ───────────────────────────────────
+  transcode-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: mentor_transcode_worker
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
     networks:
       - mentor_net
 

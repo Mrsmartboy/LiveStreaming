@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { listSessionRecordings, getDownloadUrl, getPublicUrl, s3 } from '../services/storageService';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { addTranscodeJob } from '../queue/transcodeQueue';
 
 const MINIO_BUCKET = process.env.MINIO_BUCKET || 'recordings';
 
@@ -119,6 +120,8 @@ export async function uploadRecording(req: Request, res: Response): Promise<void
   try {
     const key = `sessions/${sessionId}/${Date.now()}-recording.webm`;
 
+    console.log(`📤 Uploading recording for session ${sessionId}: size=${file.buffer.length} bytes, mime=${file.mimetype}`);
+
     await s3.send(new PutObjectCommand({
       Bucket: MINIO_BUCKET,
       Key: key,
@@ -133,10 +136,87 @@ export async function uploadRecording(req: Request, res: Response): Promise<void
       data: { recordingUrl: downloadUrl },
     }).catch(() => { /* session may not exist or field missing */ });
 
-    console.log(`✅ Recording uploaded for session ${sessionId}: ${key}`);
+    console.log(`✅ Recording uploaded for session ${sessionId}: ${key} (${file.buffer.length} bytes)`);
+
+    // Trigger HLS transcoding background job
+    await addTranscodeJob(sessionId, key);
+
     res.json({ url: downloadUrl, key });
   } catch (err) {
     console.error('Upload recording error:', err);
     res.status(500).json({ error: 'Failed to upload recording' });
   }
 }
+
+/**
+ * GET /api/recordings/:sessionId/transcode-progress
+ * Fetches active HLS transcoding progress from BullMQ.
+ */
+export async function getTranscodeProgress(req: Request, res: Response): Promise<void> {
+  const { sessionId } = req.params;
+
+  try {
+    const { transcodeQueue } = require('../queue/transcodeQueue');
+    const jobs = await transcodeQueue.getJobs(['active', 'waiting', 'delayed']);
+    console.log(`🔍 [Progress Check] SessionId: ${sessionId}, Total active/waiting/delayed jobs: ${jobs.length}`);
+    for (const j of jobs) {
+      const state = await j.getState();
+      console.log(`   - Job ID: ${j.id}, SessionId in Job: ${j.data?.sessionId}, State: ${state}, Progress: ${JSON.stringify(j.progress)}`);
+    }
+
+    const sessionJob = jobs.find((j: any) => j.data?.sessionId === sessionId);
+    console.log(`🔍 [Progress Check] sessionJob found: ${!!sessionJob}`);
+
+    if (!sessionJob) {
+      // Check if already completed recently (meaning no active job)
+      const session = await prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { hlsUrl: true },
+      });
+
+      if (session?.hlsUrl) {
+        res.json({ status: 'completed', progress: 100 });
+        return;
+      }
+
+      res.json({ status: 'not_found', progress: 0 });
+      return;
+    }
+
+    const state = await sessionJob.getState();
+    let rawProgress = sessionJob.progress;
+    if (typeof rawProgress === 'string') {
+      try {
+        rawProgress = JSON.parse(rawProgress);
+      } catch {
+        rawProgress = null;
+      }
+    }
+
+    let progressObj: any = { percent: 0, segments: 0, stage: 'waiting' };
+    if (rawProgress && typeof rawProgress === 'object') {
+      progressObj = {
+        percent: typeof rawProgress.percent === 'number' ? rawProgress.percent : 0,
+        segments: typeof rawProgress.segments === 'number' ? rawProgress.segments : 0,
+        stage: rawProgress.stage || 'waiting',
+        uploaded: rawProgress.uploaded,
+        totalFiles: rawProgress.totalFiles,
+      };
+    } else if (typeof rawProgress === 'number') {
+      progressObj.percent = rawProgress;
+    }
+
+    res.json({
+      status: state,
+      progress: progressObj.percent,
+      segments: progressObj.segments,
+      stage: progressObj.stage,
+      uploaded: progressObj.uploaded,
+      totalFiles: progressObj.totalFiles,
+    });
+  } catch (err) {
+    console.error('Get transcode progress error:', err);
+    res.status(500).json({ error: 'Failed to get progress' });
+  }
+}
+

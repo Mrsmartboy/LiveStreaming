@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import axios from 'axios';
 import prisma from '../config/prisma';
 import { AuthRequest } from '../types';
+import { addTranscodeJob } from '../queue/transcodeQueue';
 
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || '';
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || '';
@@ -112,6 +113,17 @@ export async function stopRecording(req: Request, res: Response): Promise<void> 
     });
 
     console.log(`⏹️ Recording stopped for session ${sessionId}, url: ${recordingUrl}`);
+    
+    if (recordingUrl) {
+      // Extract the MinIO object key from the download URL or assume the key based on file path
+      // Actually LiveKit Egress response has file_results[0].filename
+      const filename = fileResults[0]?.filename;
+      if (filename) {
+        // Trigger HLS transcoding background job
+        await addTranscodeJob(sessionId, filename);
+      }
+    }
+
     res.json({ status: 'stopped', recordingUrl });
   } catch (err: unknown) {
     const e = err as { response?: { data?: unknown }; message?: string };

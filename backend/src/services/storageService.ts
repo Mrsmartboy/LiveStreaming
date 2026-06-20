@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   ListObjectsV2Command,
+  DeleteObjectsCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -81,6 +82,23 @@ export async function deleteRecording(key: string): Promise<void> {
   const command = new DeleteObjectCommand({
     Bucket: MINIO_BUCKET,
     Key: key,
+  });
+  await s3.send(command);
+}
+
+/**
+ * Delete all files (videos and HLS segments) for a session in MinIO.
+ */
+export async function deleteSessionFolder(sessionId: string): Promise<void> {
+  const keys = await listSessionRecordings(sessionId).catch(() => []);
+  if (keys.length === 0) return;
+
+  const command = new DeleteObjectsCommand({
+    Bucket: MINIO_BUCKET,
+    Delete: {
+      Objects: keys.map(key => ({ Key: key })),
+      Quiet: true,
+    },
   });
   await s3.send(command);
 }

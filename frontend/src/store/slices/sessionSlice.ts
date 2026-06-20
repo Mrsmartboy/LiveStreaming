@@ -10,6 +10,7 @@ export interface Session {
   endedAt: string | null;
   livekitRoom: string;
   recordingUrl: string | null;
+  hlsUrl: string | null;
   status: 'SCHEDULED' | 'LIVE' | 'ENDED';
   createdAt: string;
   _count?: { attendance: number; questions: number };

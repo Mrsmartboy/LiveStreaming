@@ -5,6 +5,7 @@ import prisma from '../config/prisma';
 import { AuthRequest } from '../types';
 import { generateMentorToken, generateStudentToken, getLiveKitWsUrl } from '../services/livekitService';
 import { cacheSession, getCachedSession, invalidateSession } from '../services/redisService';
+import { deleteSessionFolder } from '../services/storageService';
 
 // ── Validation ─────────────────────────────────────────────────────────────
 
@@ -203,6 +204,11 @@ export async function deleteSession(req: Request, res: Response): Promise<void> 
   const { id } = req.params;
 
   try {
+    // Delete related video files and HLS segments from MinIO
+    await deleteSessionFolder(id).catch((err) => {
+      console.error(`Error deleting MinIO files for session ${id}:`, err);
+    });
+
     await prisma.session.delete({ where: { id } });
     await invalidateSession(id);
     res.json({ message: 'Session deleted' });

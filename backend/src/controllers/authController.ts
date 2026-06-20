@@ -23,6 +23,12 @@ const createStudentSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
+const createMentorSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function signToken(userId: string, role: string): string {
@@ -170,6 +176,79 @@ export async function deleteStudent(req: Request, res: Response): Promise<void> 
       return;
     }
     console.error('Delete student error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/** POST /api/auth/create-mentor — ADMIN only */
+export async function createMentor(req: Request, res: Response): Promise<void> {
+  const parsed = createMentorSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors[0].message });
+    return;
+  }
+
+  const { name, email, password } = parsed.data;
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
+    const user = await prisma.user.create({
+      data: { name, email, password: hashedPassword, role: 'MENTOR' },
+    });
+
+    res.status(201).json({
+      message: 'Mentor account created successfully',
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    });
+  } catch (err: unknown) {
+    const error = err as { code?: string };
+    if (error.code === 'P2002') {
+      res.status(409).json({ error: 'Email already exists' });
+      return;
+    }
+    console.error('Create mentor error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/** GET /api/auth/mentors — list all mentors (ADMIN) */
+export async function listMentors(req: Request, res: Response): Promise<void> {
+  try {
+    const mentors = await prisma.user.findMany({
+      where: { role: 'MENTOR' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        _count: { select: { attendance: true, questions: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json(mentors);
+  } catch (err) {
+    console.error('List mentors error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+/** DELETE /api/auth/mentors/:id — delete a mentor (ADMIN only) */
+export async function deleteMentor(req: Request, res: Response): Promise<void> {
+  const { id } = req.params;
+
+  try {
+    await prisma.user.delete({ where: { id, role: 'MENTOR' } });
+    res.json({ message: 'Mentor deleted successfully' });
+  } catch (err: unknown) {
+    const error = err as { code?: string };
+    if (error.code === 'P2025') {
+      res.status(404).json({ error: 'Mentor not found' });
+      return;
+    }
+    console.error('Delete mentor error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 }

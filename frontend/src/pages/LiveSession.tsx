@@ -67,6 +67,128 @@ function CircleVideo({
   );
 }
 
+// ── Draggable & Resizable Small circular pip video ──────────────────────────
+function DraggableCircleVideo({
+  participant,
+  isLocal,
+  label,
+}: {
+  participant: Participant | null;
+  isLocal?: boolean;
+  label?: string;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const [size, setSize] = useState(96); // default size: 96px
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [showControls, setShowControls] = useState(false);
+
+  const isCamOn = participant?.isCameraEnabled;
+
+  useEffect(() => {
+    if (!participant || !videoRef.current) return;
+    const pub = participant.getTrackPublication(Track.Source.Camera);
+    if (pub?.track) pub.track.attach(videoRef.current);
+
+    const handler = () => {
+      const p = participant.getTrackPublication(Track.Source.Camera);
+      if (p?.track && videoRef.current) p.track.attach(videoRef.current);
+    };
+    participant.on('trackSubscribed', handler);
+    participant.on('localTrackPublished', handler);
+    participant.on('trackPublished', handler);
+
+    return () => {
+      participant.off('trackSubscribed', handler);
+      participant.off('localTrackPublished', handler);
+      participant.off('trackPublished', handler);
+      const p = participant.getTrackPublication(Track.Source.Camera);
+      if (p?.track && videoRef.current) p.track.detach(videoRef.current);
+    };
+  }, [participant, isCamOn]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).tagName === 'INPUT') return;
+
+    e.preventDefault();
+    setIsDragging(true);
+
+    const startX = e.clientX - position.x;
+    const startY = e.clientY - position.y;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const newX = moveEvent.clientX - startX;
+      const newY = moveEvent.clientY - startY;
+      setPosition({ x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseDown={handleMouseDown}
+      onMouseEnter={() => setShowControls(true)}
+      onMouseLeave={() => setShowControls(false)}
+      style={{
+        transform: `translate(${position.x}px, ${position.y}px)`,
+        width: `${size}px`,
+        height: `${size}px`,
+        cursor: isDragging ? 'grabbing' : 'grab',
+      }}
+      className="absolute bottom-4 right-4 z-50 flex items-center justify-center transition-shadow duration-200"
+    >
+      {/* Video element container */}
+      <div
+        style={{ width: `${size}px`, height: `${size}px` }}
+        className="w-full h-full relative rounded-full overflow-hidden border-2 border-indigo-500 shadow-2xl bg-slate-900"
+      >
+        <video ref={videoRef} autoPlay muted={isLocal} playsInline className="w-full h-full object-cover" />
+        {!isCamOn && (
+          <div className="absolute inset-0 bg-slate-800 flex items-center justify-center">
+            <span className="text-white font-bold text-lg">
+              {(label || participant?.name || '?').charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
+        {label && (
+          <div className="absolute bottom-1 left-0 right-0 text-center">
+            <span className="text-[10px] text-white/80 bg-black/50 px-1.5 rounded-full">{label}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Hover resize controls */}
+      {showControls && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900/90 border border-slate-800 text-xs px-2 py-1.5 rounded-lg flex items-center gap-2 shadow-xl backdrop-blur-sm pointer-events-auto"
+        >
+          <span className="text-slate-400">Size:</span>
+          <input
+            type="range"
+            min="64"
+            max="256"
+            value={size}
+            onChange={(e) => setSize(parseInt(e.target.value))}
+            className="w-20 accent-indigo-500"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Large main stage video ──────────────────────────────────────────────────
 function MainVideo({
   participant,
@@ -688,16 +810,13 @@ function MentorLayout({
         </div>
       )}
 
-      {/* Mentor self-cam: always small circle, bottom-right */}
+      {/* Mentor self-cam: draggable & resizable circle */}
       {localParticipant && (
-        <div className="absolute bottom-4 right-4 z-20">
-          <CircleVideo
-            participant={localParticipant}
-            isLocal
-            label="You"
-            className="w-20 h-20 shadow-2xl ring-2 ring-indigo-500/50"
-          />
-        </div>
+        <DraggableCircleVideo
+          participant={localParticipant}
+          isLocal
+          label="You"
+        />
       )}
     </div>
   );

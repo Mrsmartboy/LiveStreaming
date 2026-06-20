@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { getRecordings, setRecordingUrl, listAllRecordings, uploadRecording } from '../controllers/recordingController';
+import { getRecordings, setRecordingUrl, listAllRecordings, uploadRecording, getTranscodeProgress } from '../controllers/recordingController';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { requireRole } from '../middleware/roleMiddleware';
 
@@ -11,6 +11,7 @@ router.use(authMiddleware);
 
 router.get('/', listAllRecordings);
 router.get('/:sessionId', getRecordings);
+router.get('/:sessionId/transcode-progress', getTranscodeProgress);
 router.put('/:sessionId/url', requireRole('ADMIN', 'MENTOR'), setRecordingUrl);
 router.post('/:sessionId/upload', requireRole('ADMIN', 'MENTOR'), upload.single('recording'), uploadRecording);
 

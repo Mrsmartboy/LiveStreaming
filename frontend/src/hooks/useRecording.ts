@@ -11,89 +11,159 @@ export function useRecording({ sessionId, onUploadComplete, onError }: UseRecord
   const [isUploading, setIsUploading] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  /** Mix all active audio tracks from the room into a single MediaStream */
-  const buildAudioStream = useCallback((): MediaStream | null => {
-    try {
-      const ctx = new AudioContext();
-      audioCtxRef.current = ctx;
-      const dest = ctx.createMediaStreamDestination();
-
-      // Collect all playing <audio> elements LiveKit injected into the DOM
-      document.querySelectorAll('audio').forEach((el) => {
-        if (el.srcObject instanceof MediaStream) {
-          const src = ctx.createMediaStreamSource(el.srcObject);
-          src.connect(dest);
-        }
-      });
-
-      return dest.stream;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const start = useCallback(() => {
+  const start = useCallback(async () => {
     chunksRef.current = [];
-    const stream = buildAudioStream();
-    if (!stream || stream.getTracks().length === 0) {
-      onError?.('No audio stream available. Make sure microphones are active.');
-      return;
-    }
 
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-      ? 'audio/webm;codecs=opus'
-      : 'audio/webm';
+    try {
+      // 1. Capture the screen/tab with system/tab audio
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          // @ts-ignore
+          preferCurrentTab: true,
+          frameRate: { ideal: 30 },
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      screenStreamRef.current = screenStream;
 
-    const recorder = new MediaRecorder(stream, { mimeType });
-    recorderRef.current = recorder;
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
-
-    recorder.onstop = async () => {
-      audioCtxRef.current?.close();
-      audioCtxRef.current = null;
-
-      const blob = new Blob(chunksRef.current, { type: mimeType });
-      setIsUploading(true);
+      // 2. Capture microphone stream (voice)
+      let micStream: MediaStream | null = null;
       try {
-        const formData = new FormData();
-        formData.append('recording', blob, `recording-${sessionId}-${Date.now()}.webm`);
-        const res = await fetch(`/api/recordings/${sessionId}/upload`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-          body: formData,
-        });
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStreamRef.current = micStream;
+      } catch (e) {
+        console.warn('Microphone not available or permission denied:', e);
+      }
 
-        if (res.ok) {
-          const { url } = await res.json();
-          onUploadComplete?.(url);
-        } else {
+      // 3. Set up Web Audio Context to mix them
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioCtxRef.current = audioContext;
+      const dest = audioContext.createMediaStreamDestination();
+
+      // Connect screen audio to mixer if it exists
+      const screenAudioTracks = screenStream.getAudioTracks();
+      if (screenAudioTracks.length > 0) {
+        const screenSource = audioContext.createMediaStreamSource(new MediaStream([screenAudioTracks[0]]));
+        screenSource.connect(dest);
+      }
+
+      // Connect mic audio to mixer if it exists
+      if (micStream && micStream.getAudioTracks().length > 0) {
+        const micSource = audioContext.createMediaStreamSource(new MediaStream([micStream.getAudioTracks()[0]]));
+        micSource.connect(dest);
+      }
+
+      // 4. Combine screen video with mixed audio
+      const mixedStream = new MediaStream();
+      mixedStream.addTrack(screenStream.getVideoTracks()[0]);
+
+      const mixedAudioTracks = dest.stream.getAudioTracks();
+      if (mixedAudioTracks.length > 0) {
+        mixedStream.addTrack(mixedAudioTracks[0]);
+      } else if (screenAudioTracks.length > 0) {
+        // Fallback to screen audio only if mixing failed
+        mixedStream.addTrack(screenAudioTracks[0]);
+      }
+
+      // 5. Set up MediaRecorder using the mixedStream
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        ? 'video/webm;codecs=vp9,opus'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+          ? 'video/webm;codecs=vp8,opus'
+          : 'video/webm';
+
+      console.log(`🎬 Screen recording started with mixed audio: mime=${mimeType}, tracks=${mixedStream.getTracks().length}`);
+
+      const recorder = new MediaRecorder(mixedStream, {
+        mimeType,
+        videoBitsPerSecond: 3_000_000, // 3 Mbps for good screen quality
+      });
+      recorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        // Cleanup screen stream tracks
+        screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+        screenStreamRef.current = null;
+
+        // Cleanup microphone stream tracks
+        micStreamRef.current?.getTracks().forEach((t) => t.stop());
+        micStreamRef.current = null;
+
+        audioCtxRef.current?.close();
+        audioCtxRef.current = null;
+
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        console.log(`📦 Screen recording blob: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+
+        if (blob.size < 1000) {
+          onError?.('Recording is too small — it may be empty.');
+          return;
+        }
+
+        setIsUploading(true);
+        try {
+          const formData = new FormData();
+          formData.append('recording', blob, `recording-${sessionId}-${Date.now()}.webm`);
+          const res = await fetch(`/api/recordings/${sessionId}/upload`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+            body: formData,
+          });
+
+          if (res.ok) {
+            const { url } = await res.json();
+            onUploadComplete?.(url);
+          } else {
+            // Fallback: direct browser download
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `recording-${sessionId}-${Date.now()}.webm`;
+            a.click();
+            onUploadComplete?.('');
+          }
+        } catch {
           // Fallback: direct browser download
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
           a.download = `recording-${sessionId}-${Date.now()}.webm`;
           a.click();
           onUploadComplete?.('');
+        } finally {
+          setIsUploading(false);
         }
-      } catch {
-        // Fallback: direct browser download
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `recording-${sessionId}-${Date.now()}.webm`;
-        a.click();
-        onUploadComplete?.('');
-      } finally {
-        setIsUploading(false);
-      }
-    };
+      };
 
-    recorder.start(1000); // collect chunk every second
-    setIsRecording(true);
-  }, [sessionId, buildAudioStream, onUploadComplete, onError]);
+      // If user stops sharing via browser's native "Stop sharing" button
+      screenStream.getVideoTracks()[0].onended = () => {
+        if (recorderRef.current?.state === 'recording') {
+          recorderRef.current.stop();
+          setIsRecording(false);
+        }
+      };
+
+      recorder.start(1000); // chunk every second
+      setIsRecording(true);
+    } catch (err: any) {
+      // User cancelled the screen share prompt
+      if (err.name === 'NotAllowedError') {
+        onError?.('Screen recording permission denied.');
+      } else {
+        onError?.(`Failed to start recording: ${err.message}`);
+      }
+    }
+  }, [sessionId, onUploadComplete, onError]);
 
   const stop = useCallback(() => {
     recorderRef.current?.stop();

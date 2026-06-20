@@ -8,6 +8,8 @@ import MentorDashboard from './pages/MentorDashboard';
 import StudentDashboard from './pages/StudentDashboard';
 import LiveSession from './pages/LiveSession';
 import AdminPanel from './pages/AdminPanel';
+import WatchRecording from './pages/WatchRecording';
+import Recordings from './pages/Recordings';
 import { useAppSelector } from './store';
 
 function RoleRedirect() {
@@ -26,7 +28,8 @@ function AppRoutes() {
       <Route path="/mentor/admin" element={<ProtectedRoute allowedRoles={['MENTOR', 'ADMIN']}><AdminPanel /></ProtectedRoute>} />
       <Route path="/student" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentDashboard /></ProtectedRoute>} />
       <Route path="/session/:sessionId" element={<ProtectedRoute><LiveSession /></ProtectedRoute>} />
-      <Route path="/recordings" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
+      <Route path="/recordings" element={<ProtectedRoute><Recordings /></ProtectedRoute>} />
+      <Route path="/watch/:sessionId" element={<ProtectedRoute><WatchRecording /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
