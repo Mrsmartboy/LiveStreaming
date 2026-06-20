@@ -39,7 +39,18 @@ export function useRecording({ sessionId, room, onUploadComplete, onError }: Use
       // 2. Capture microphone stream (voice)
       let micStream: MediaStream | null = null;
       try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            // @ts-ignore
+            googNoiseSuppression: true,
+            googEchoCancellation: true,
+            googAutoGainControl: true,
+            googHighpassFilter: true,
+          },
+        });
         micStreamRef.current = micStream;
       } catch (e) {
         console.warn('Microphone not available or permission denied:', e);

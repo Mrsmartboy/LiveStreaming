@@ -76,6 +76,14 @@ export function useLiveKit() {
             autoGainControl: true,
             channelCount: 1,
             sampleRate: 48000,
+            // @ts-ignore
+            googNoiseSuppression: true,
+            // @ts-ignore
+            googEchoCancellation: true,
+            // @ts-ignore
+            googAutoGainControl: true,
+            // @ts-ignore
+            googHighpassFilter: true,
           },
         });
         roomRef.current = room;
