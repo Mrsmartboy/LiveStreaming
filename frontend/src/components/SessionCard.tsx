@@ -99,6 +99,11 @@ export default function SessionCard({ session, showControls = false }: SessionCa
           {session.status === 'LIVE' && (
             <Link
               to={`/session/${session.id}`}
+              onClick={() => {
+                document.documentElement.requestFullscreen().catch((err) => {
+                  console.error('Error entering fullscreen:', err);
+                });
+              }}
               className="btn-brand text-sm py-2 px-4 inline-flex items-center gap-2"
             >
               <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
 import { fetchSessions } from '../store/slices/sessionSlice';
 import SessionCard from '../components/SessionCard';
@@ -42,15 +43,20 @@ export default function StudentDashboard() {
                 {liveSessions[0].description && (
                   <p className="text-white/70 text-sm mb-4">{liveSessions[0].description}</p>
                 )}
-                <a
-                  href={`/session/${liveSessions[0].id}`}
+                <Link
+                  to={`/session/${liveSessions[0].id}`}
+                  onClick={() => {
+                    document.documentElement.requestFullscreen().catch((err) => {
+                      console.error('Error entering fullscreen:', err);
+                    });
+                  }}
                   className="inline-flex items-center gap-2 bg-white text-indigo-600 font-bold px-6 py-3 rounded-xl hover:bg-white/90 transition-colors duration-200"
                 >
                   Join Session
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
-                </a>
+                </Link>
               </div>
             </div>
           </div>
