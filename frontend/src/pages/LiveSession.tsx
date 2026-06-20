@@ -419,10 +419,24 @@ export default function LiveSession() {
   const livekit = useLiveKit();
   const isConnected = livekit.connectionState === ConnectionState.Connected;
 
-  // Detect if mentor is screen sharing
+  // Helper to check if participant is mentor using role metadata
+  const isParticipantMentor = (p: Participant | null) => {
+    if (!p) return false;
+    try {
+      const meta = JSON.parse(p.metadata || '{}');
+      return meta.role === 'MENTOR';
+    } catch {
+      return false;
+    }
+  };
+
+  // Detect mentor participant
   const mentorParticipant = isMentor
     ? livekit.localParticipant
-    : (livekit.remoteParticipants.find(p => p.name && p.name !== user?.name) ?? livekit.remoteParticipants[0]);
+    : (livekit.remoteParticipants.find(p => isParticipantMentor(p)) ??
+       livekit.remoteParticipants.find(p => p.name && p.name !== user?.name) ??
+       livekit.remoteParticipants[0] ??
+       null);
 
   const isScreenSharing = isMentor
     ? livekit.isScreenSharing

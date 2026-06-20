@@ -7,6 +7,9 @@ import {
   ConnectionState,
   Track,
   Participant,
+  VideoPresets,
+  ScreenSharePresets,
+  AudioPresets,
 } from 'livekit-client';
 
 export interface LiveKitState {
@@ -54,6 +57,19 @@ export function useLiveKit() {
         const room = new Room({
           adaptiveStream: true,
           dynacast: true,
+          videoCaptureDefaults: {
+            resolution: VideoPresets.h720.resolution,
+          },
+          publishDefaults: {
+            videoEncoding: VideoPresets.h720.encoding,
+            screenShareEncoding: ScreenSharePresets.h1080fps30.encoding,
+            videoSimulcastLayers: [
+              VideoPresets.h360,
+              VideoPresets.h720,
+            ],
+            audioPreset: AudioPresets.speech,
+            dtx: true,
+          },
           audioCaptureDefaults: {
             echoCancellation: true,
             noiseSuppression: true,
@@ -73,10 +89,27 @@ export function useLiveKit() {
         room.on(RoomEvent.ParticipantDisconnected, syncParticipants);
 
         // Auto-attach remote audio tracks so they play through the speakers
-        room.on(RoomEvent.TrackSubscribed, (track, _publication, _participant) => {
+        room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
           if (track.kind === Track.Kind.Audio) {
-            // attach() with no args creates a hidden <audio> element on the page and plays it
-            track.attach();
+            // Helper to check if participant is mentor
+            const isParticipantMentor = (p: Participant | null) => {
+              if (!p) return false;
+              try {
+                const meta = JSON.parse(p.metadata || '{}');
+                return meta.role === 'MENTOR';
+              } catch {
+                return false;
+              }
+            };
+
+            const isLocalMentor = isParticipantMentor(room.localParticipant);
+            const isRemoteMentor = isParticipantMentor(participant);
+
+            // Students only hear the mentor. Mentors hear all students who speak.
+            if (isLocalMentor || isRemoteMentor) {
+              // attach() with no args creates a hidden <audio> element on the page and plays it
+              track.attach();
+            }
           }
           syncParticipants();
         });

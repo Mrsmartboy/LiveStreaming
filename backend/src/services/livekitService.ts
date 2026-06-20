@@ -23,9 +23,10 @@ export function generateLiveKitToken(options: {
   name: string;
   roomName: string;
   canPublish: boolean;
+  metadata?: string;
   ttlSeconds?: number;
 }): string {
-  const { identity, name, roomName, canPublish, ttlSeconds = 3600 } = options;
+  const { identity, name, roomName, canPublish, metadata, ttlSeconds = 3600 } = options;
 
   const now = Math.floor(Date.now() / 1000);
 
@@ -41,6 +42,7 @@ export function generateLiveKitToken(options: {
     iss: LIVEKIT_API_KEY,
     sub: identity,
     name,
+    metadata,
     video: grant,
     nbf: now,
     exp: now + ttlSeconds,
@@ -59,6 +61,7 @@ export function generateMentorToken(userId: string, userName: string, roomName: 
     name: userName,
     roomName,
     canPublish: true,
+    metadata: JSON.stringify({ role: 'MENTOR' }),
   });
 }
 
@@ -71,6 +74,7 @@ export function generateStudentToken(userId: string, userName: string, roomName:
     name: userName,
     roomName,
     canPublish: true,   // Students CAN publish — mic is controlled by UI raise-hand flow
+    metadata: JSON.stringify({ role: 'STUDENT' }),
   });
 }
 
