@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import prisma from '../config/prisma';
 import {
   addUserToRoom,
@@ -149,6 +150,42 @@ export default function socketHandler(io: Server): void {
     socket.on('mentor-message', ({ sessionId, message }: { sessionId: string; message: string }) => {
       if (user.role !== 'MENTOR' && user.role !== 'ADMIN') return;
       io.to(sessionId).emit('mentor-announcement', { message, time: new Date().toISOString() });
+    });
+
+    // ── Live Chat ──────────────────────────────────────────────────────────
+    socket.on('send-chat-message', ({ sessionId, text, userName }: { sessionId: string; text: string; userName: string }) => {
+      if (!text?.trim()) return;
+      const messagePayload = {
+        id: uuidv4(),
+        text: text.trim(),
+        userId: user.userId,
+        userName: userName || 'User',
+        role: user.role,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (user.role === 'MENTOR' || user.role === 'ADMIN') {
+        // Mentor messages go to everyone in the room
+        io.to(sessionId).emit('new-chat-message', messagePayload);
+      } else {
+        // Student messages go ONLY to the sender and all Mentors/Admins in the room
+        const roomSockets = io.sockets.adapter.rooms.get(sessionId);
+        if (roomSockets) {
+          for (const socketId of roomSockets) {
+            const clientSocket = io.sockets.sockets.get(socketId) as AuthenticatedSocket;
+            if (clientSocket) {
+              const clientUser = clientSocket.user;
+              if (
+                clientSocket.id === socket.id ||
+                clientUser?.role === 'MENTOR' ||
+                clientUser?.role === 'ADMIN'
+              ) {
+                clientSocket.emit('new-chat-message', messagePayload);
+              }
+            }
+          }
+        }
+      }
     });
 
     // ── Live Transcript ────────────────────────────────────────────────────

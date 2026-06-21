@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { useAppDispatch, useAppSelector } from '../store';
 import { addQuestion, markQuestionAnswered } from '../store/slices/questionSlice';
 import { Question } from '../store/slices/questionSlice';
+import { addChatMessage } from '../store/slices/chatSlice';
 
 // Connect to empty string = same host/port as the page was loaded from.
 // Vite proxies /socket.io/* → http://backend:5000, so this works
@@ -83,6 +84,9 @@ export function useSocket({
     socket.on('new-question', (question: Question) => dispatch(addQuestion(question)));
     socket.on('question-answered', ({ questionId }: { questionId: string }) => dispatch(markQuestionAnswered(questionId)));
 
+    // Chat
+    socket.on('new-chat-message', (message: any) => dispatch(addChatMessage(message)));
+
     // Presence
     socket.on('student-joined', (event: StudentJoinedEvent) => onStudentJoined?.(event));
     socket.on('student-left', (event: StudentLeftEvent) => onStudentLeft?.(event));
@@ -156,10 +160,16 @@ export function useSocket({
     socketRef.current?.emit('end-session', { sessionId });
   }, [sessionId]);
 
+  const sendChatMessage = useCallback((text: string) => {
+    if (!socketRef.current || !user) return;
+    socketRef.current.emit('send-chat-message', { sessionId, text, userName: user.name });
+  }, [sessionId, user]);
+
   return {
     sendQuestion,
     answerQuestion,
     sendAnnouncement,
+    sendChatMessage,
     raiseHand,
     lowerHand,
     approveUnmute,

@@ -7,6 +7,8 @@ import { useLiveKit } from '../hooks/useLiveKit';
 import { useSocket } from '../hooks/useSocket';
 import { useRecording } from '../hooks/useRecording';
 import AttendanceList from '../components/AttendanceList';
+import ChatPanel from '../components/ChatPanel';
+import { clearChatMessages } from '../store/slices/chatSlice';
 import api from '../services/api';
 
 // ── Small circular pip video ────────────────────────────────────────────────
@@ -396,7 +398,8 @@ export default function LiveSession() {
   const isMentor = user?.role === 'MENTOR' || user?.role === 'ADMIN';
 
   const [session, setSession] = useState<{ id: string; title: string; status: string } | null>(null);
-  const [sidePanel, setSidePanel] = useState<'attendance' | 'hands'>('hands');
+  const [sidePanel, setSidePanel] = useState<'attendance' | 'hands' | 'chat'>('chat');
+  const [showStudentChat, setShowStudentChat] = useState(true);
   const [onlineCount, setOnlineCount] = useState(0);
   const [notifications, setNotifications] = useState<{ id: number; text: string; type: 'info' | 'warn' | 'success' }[]>([]);
   const [connectError, setConnectError] = useState('');
@@ -565,7 +568,10 @@ export default function LiveSession() {
       }
     };
     init();
-    return () => { livekit.disconnect(); };
+    return () => {
+      livekit.disconnect();
+      dispatch(clearChatMessages());
+    };
   }, [sessionId]);
 
   const handleRaiseHand = () => {
@@ -744,6 +750,11 @@ export default function LiveSession() {
                 className={`p-2 rounded-xl border transition-all hidden sm:flex ${livekit.isScreenSharing ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
                 <ScreenIcon />
               </button>
+              {/* Student: Toggle Chat */}
+              <button onClick={() => setShowStudentChat(prev => !prev)} title="Toggle Chat"
+                className={`p-2 rounded-xl border transition-all ${showStudentChat ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                <ChatIcon />
+              </button>
               {/* Leave */}
               <button onClick={handleLeave} className="text-xs font-semibold px-3 py-2 rounded-xl border border-slate-700 text-slate-400 hover:text-red-400 hover:border-red-500/40 transition-all">
                 Leave
@@ -802,9 +813,9 @@ export default function LiveSession() {
           )}
         </div>
 
-        {/* Side Panel (Mentor only) */}
-        {isMentor && (
-          <div className="w-72 flex-shrink-0 border-l border-slate-800 flex flex-col">
+        {/* Side Panel */}
+        {isMentor ? (
+          <div className="w-72 flex-shrink-0 border-l border-slate-800 flex flex-col bg-slate-900/40">
             {/* Tabs */}
             <div className="flex border-b border-slate-800 flex-shrink-0">
               <TabButton active={sidePanel === 'hands'} onClick={() => setSidePanel('hands')}>
@@ -813,6 +824,9 @@ export default function LiveSession() {
                     {raisedHands.length}
                   </span>
                 )}
+              </TabButton>
+              <TabButton active={sidePanel === 'chat'} onClick={() => setSidePanel('chat')}>
+                Chat
               </TabButton>
               <TabButton active={sidePanel === 'attendance'} onClick={() => setSidePanel('attendance')}>
                 People
@@ -828,6 +842,9 @@ export default function LiveSession() {
                   onDeny={socket.denyUnmute}
                 />
               )}
+              {sidePanel === 'chat' && (
+                <ChatPanel onSendMessage={socket.sendChatMessage} />
+              )}
               {sidePanel === 'attendance' && (
                 <AttendanceList
                   sessionId={sessionId!}
@@ -839,6 +856,13 @@ export default function LiveSession() {
               )}
             </div>
           </div>
+        ) : (
+          /* Student Side Panel (Collapsible Chat) */
+          showStudentChat && (
+            <div className="w-72 flex-shrink-0 border-l border-slate-800 flex flex-col bg-slate-900/40 p-2">
+              <ChatPanel onSendMessage={socket.sendChatMessage} />
+            </div>
+          )
         )}
       </div>
 
@@ -1045,6 +1069,14 @@ function SparklesIcon({ active }: { active: boolean }) {
   return (
     <svg className={`w-4 h-4 transition-colors ${active ? 'text-emerald-400' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
     </svg>
   );
 }

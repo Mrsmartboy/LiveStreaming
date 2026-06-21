@@ -28,6 +28,15 @@ export function useLiveKit() {
   const roomRef = useRef<Room | null>(null);
   const rnnoiseProcessorRef = useRef<any>(null);
   const isNoiseCancellationEnabledRef = useRef<boolean>(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const remoteAudioNodesRef = useRef<Map<string, {
+    source: MediaStreamAudioSourceNode;
+    highpass: BiquadFilterNode;
+    peaking: BiquadFilterNode;
+    compressor: DynamicsCompressorNode;
+    gain: GainNode;
+    audioElement: HTMLMediaElement;
+  }>>(new Map());
 
   const [state, setState] = useState<LiveKitState>({
     room: null,
@@ -95,33 +104,99 @@ export function useLiveKit() {
         room.on(RoomEvent.ParticipantDisconnected, syncParticipants);
 
         // Auto-attach remote audio tracks so they play through the speakers
-        room.on(RoomEvent.TrackSubscribed, (track, _publication, participant) => {
+        room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
           if (track.kind === Track.Kind.Audio) {
-            // Helper to check if participant is mentor
-            const isParticipantMentor = (p: Participant | null) => {
-              if (!p) return false;
+            if (track.mediaStreamTrack) {
               try {
-                const meta = JSON.parse(p.metadata || '{}');
-                return meta.role === 'MENTOR';
-              } catch {
-                return false;
+                if (!audioContextRef.current) {
+                  audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+                }
+                const ctx = audioContextRef.current;
+                if (ctx.state === 'suspended') {
+                  ctx.resume();
+                }
+
+                // 1. Prime the WebRTC track in Chromium by attaching it to an audio element and muting it
+                const audioElement = track.attach();
+                audioElement.muted = true; // Mute so it doesn't play directly through speakers twice
+
+                // 2. Create source from the remote media stream track
+                const source = ctx.createMediaStreamSource(new MediaStream([track.mediaStreamTrack]));
+
+                // Prevent V8 Garbage Collection from claiming the source node mid-session
+                if (!(window as any)._activeAudioSources) {
+                  (window as any)._activeAudioSources = new Set();
+                }
+                (window as any)._activeAudioSources.add(source);
+
+                // 3. High-pass filter (cutoff 150 Hz) - removes boomy bass / rumble from low-pitched voices
+                const highpass = ctx.createBiquadFilter();
+                highpass.type = 'highpass';
+                highpass.frequency.value = 150;
+
+                // 4. Peaking filter (center frequency 3000 Hz, boost +6dB) - increases clarity/intelligibility
+                const peaking = ctx.createBiquadFilter();
+                peaking.type = 'peaking';
+                peaking.frequency.value = 3000;
+                peaking.Q.value = 1.0;
+                peaking.gain.value = 6;
+
+                // 5. Dynamics Compressor - levels the volume of low/quiet voices
+                const compressor = ctx.createDynamicsCompressor();
+                compressor.threshold.value = -24;
+                compressor.knee.value = 30;
+                compressor.ratio.value = 4;
+                compressor.attack.value = 0.01;
+                compressor.release.value = 0.25;
+
+                // 6. Gain Node (+3.5dB makeup gain) - increases the volume to make quiet voices highly audible
+                const gain = ctx.createGain();
+                gain.gain.value = 1.5;
+
+                // Connect the chain
+                source.connect(highpass);
+                highpass.connect(peaking);
+                peaking.connect(compressor);
+                compressor.connect(gain);
+                gain.connect(ctx.destination);
+
+                const sid = publication?.trackSid || track.sid;
+                if (sid) {
+                  remoteAudioNodesRef.current.set(sid, { source, highpass, peaking, compressor, gain, audioElement });
+                  console.log(`🎙️ Automatically enhanced remote audio track: ${sid}`);
+                }
+              } catch (err) {
+                console.error('Failed to set up automatic voice clarity/leveling, falling back to raw playback', err);
+                track.attach();
               }
-            };
-
-            const isLocalMentor = isParticipantMentor(room.localParticipant);
-            const isRemoteMentor = isParticipantMentor(participant);
-
-            // Students only hear the mentor. Mentors hear all students who speak.
-            if (isLocalMentor || isRemoteMentor) {
-              // attach() with no args creates a hidden <audio> element on the page and plays it
+            } else {
+              // Fallback if no mediaStreamTrack is present
               track.attach();
             }
           }
           syncParticipants();
         });
 
-        room.on(RoomEvent.TrackUnsubscribed, (track) => {
+        room.on(RoomEvent.TrackUnsubscribed, (track, publication) => {
           if (track.kind === Track.Kind.Audio) {
+            const sid = publication?.trackSid || track.sid;
+            if (sid) {
+              const nodes = remoteAudioNodesRef.current.get(sid);
+              if (nodes) {
+                nodes.source.disconnect();
+                if ((window as any)._activeAudioSources) {
+                  (window as any)._activeAudioSources.delete(nodes.source);
+                }
+                nodes.highpass.disconnect();
+                nodes.peaking.disconnect();
+                nodes.compressor.disconnect();
+                nodes.gain.disconnect();
+                if (nodes.audioElement) {
+                  track.detach(nodes.audioElement);
+                }
+                remoteAudioNodesRef.current.delete(sid);
+              }
+            }
             track.detach();
           }
           syncParticipants();
@@ -191,6 +266,24 @@ export function useLiveKit() {
       roomRef.current = null;
     }
     rnnoiseProcessorRef.current = null;
+
+    // Clean up Web Audio nodes
+    remoteAudioNodesRef.current.forEach((nodes) => {
+      nodes.source.disconnect();
+      if ((window as any)._activeAudioSources) {
+        (window as any)._activeAudioSources.delete(nodes.source);
+      }
+      nodes.highpass.disconnect();
+      nodes.peaking.disconnect();
+      nodes.compressor.disconnect();
+      nodes.gain.disconnect();
+    });
+    remoteAudioNodesRef.current.clear();
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      await audioContextRef.current.close().catch(console.error);
+    }
+    audioContextRef.current = null;
+
     setState({
       room: null,
       localParticipant: null,
@@ -263,6 +356,16 @@ export function useLiveKit() {
     }
   }, []);
 
+  // Periodic check to resume suspended AudioContext (fixes 5-minute background/silence sleep in Chrome)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(console.error);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -274,6 +377,23 @@ export function useLiveKit() {
         roomRef.current.disconnect();
       }
       rnnoiseProcessorRef.current = null;
+
+      // Clean up Web Audio nodes
+      remoteAudioNodesRef.current.forEach((nodes) => {
+        nodes.source.disconnect();
+        if ((window as any)._activeAudioSources) {
+          (window as any)._activeAudioSources.delete(nodes.source);
+        }
+        nodes.highpass.disconnect();
+        nodes.peaking.disconnect();
+        nodes.compressor.disconnect();
+        nodes.gain.disconnect();
+      });
+      remoteAudioNodesRef.current.clear();
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(console.error);
+      }
+      audioContextRef.current = null;
     };
   }, []);
 

@@ -92,8 +92,10 @@ export function useRecording({ sessionId, room, onUploadComplete, onError }: Use
         }
       };
 
-      if (room) {
-        // Mix existing remote audio tracks
+      const hasScreenAudio = screenAudioTracks.length > 0;
+
+      if (room && !hasScreenAudio) {
+        // Mix existing remote audio tracks (only if we are NOT capturing tab audio to prevent doubling)
         room.remoteParticipants.forEach((participant) => {
           participant.trackPublications.forEach((pub) => {
             if (pub.track && pub.kind === 'audio' && pub.track.mediaStreamTrack) {
