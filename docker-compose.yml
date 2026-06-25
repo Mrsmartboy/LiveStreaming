@@ -115,6 +115,7 @@ services:
       - backend
     volumes:
       - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
     networks:
       - mentor_net
 

@@ -11,98 +11,176 @@ import ChatPanel from '../components/ChatPanel';
 import { clearChatMessages } from '../store/slices/chatSlice';
 import api from '../services/api';
 
-// ── Small circular pip video ────────────────────────────────────────────────
-function CircleVideo({
-  participant,
-  isLocal,
-  label,
-  className = '',
-}: {
-  participant: Participant | null;
-  isLocal?: boolean;
-  label?: string;
-  className?: string;
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const isCamOn = participant?.isCameraEnabled;
-
-  useEffect(() => {
-    if (!participant || !videoRef.current) return;
-    const pub = participant.getTrackPublication(Track.Source.Camera);
-    if (pub?.track) pub.track.attach(videoRef.current);
-
-    const handler = () => {
-      const p = participant.getTrackPublication(Track.Source.Camera);
-      if (p?.track && videoRef.current) p.track.attach(videoRef.current);
-    };
-    participant.on('trackSubscribed', handler);
-    // Also listen for local track publish events
-    participant.on('localTrackPublished', handler);
-    participant.on('trackPublished', handler);
-    
-    return () => {
-      participant.off('trackSubscribed', handler);
-      participant.off('localTrackPublished', handler);
-      participant.off('trackPublished', handler);
-      const p = participant.getTrackPublication(Track.Source.Camera);
-      if (p?.track && videoRef.current) p.track.detach(videoRef.current);
-    };
-  }, [participant, isCamOn]);
-
+// ── SVG Icon Components ──────────────────────────────────────────────────────
+function SettingsIcon() {
   return (
-    <div className={`relative rounded-full overflow-hidden border-2 border-indigo-500/60 shadow-xl shadow-indigo-500/20 ${className}`}>
-      <video ref={videoRef} autoPlay muted={isLocal} playsInline className="w-full h-full object-cover" />
-      {!isCamOn && (
-        <div className="absolute inset-0 bg-slate-800 flex items-center justify-center">
-          <span className="text-white font-bold text-lg">
-            {(label || participant?.name || '?').charAt(0).toUpperCase()}
-          </span>
-        </div>
-      )}
-      {label && (
-        <div className="absolute bottom-1 left-0 right-0 text-center">
-          <span className="text-[10px] text-white/80 bg-black/50 px-1.5 rounded-full">{label}</span>
-        </div>
-      )}
-    </div>
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
   );
 }
 
-// ── Draggable & Resizable Small circular pip video ──────────────────────────
-function DraggableCircleVideo({
+function LayoutGridIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+    </svg>
+  );
+}
+
+// Presentation layout icon
+function SpeakerIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function HangupIcon() {
+  return (
+    <svg className="w-5 h-5 transform rotate-[135deg]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+  );
+}
+
+function PeopleIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function HandsIcon() {
+  return (
+    <span className="text-lg leading-none">✋</span>
+  );
+}
+
+function MicIcon({ muted }: { muted: boolean }) {
+  return muted ? (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+    </svg>
+  ) : (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+    </svg>
+  );
+}
+
+function CamIcon({ off }: { off: boolean }) {
+  return off ? (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+    </svg>
+  ) : (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function ScreenIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function SparklesIcon({ active }: { active: boolean }) {
+  return (
+    <svg className={`w-5 h-5 transition-colors ${active ? 'text-emerald-400' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+    </svg>
+  );
+}
+
+// ── Participant Tile Component ──────────────────────────────────────────────
+function ParticipantTile({
   participant,
   isLocal,
-  label,
+  isMentorTile,
+  onForceMute,
+  isCompact = false,
+  fillHeight = false,
 }: {
-  participant: Participant | null;
+  participant: Participant;
   isLocal?: boolean;
-  label?: string;
+  isMentorTile?: boolean;
+  onForceMute?: (identity: string) => void;
+  isCompact?: boolean;
+  fillHeight?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const [size, setSize] = useState(96); // default size: 96px
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [showControls, setShowControls] = useState(false);
-
-  const isCamOn = participant?.isCameraEnabled;
+  const isCamOn = participant.isCameraEnabled;
+  const isMicOn = participant.isMicrophoneEnabled;
+  const [speaking, setSpeaking] = useState(participant.isSpeaking);
 
   useEffect(() => {
-    if (!participant || !videoRef.current) return;
-    const pub = participant.getTrackPublication(Track.Source.Camera);
-    if (pub?.track) pub.track.attach(videoRef.current);
+    const handleSpeaking = () => {
+      setSpeaking(participant.isSpeaking);
+    };
+    participant.on('isSpeakingChanged', handleSpeaking);
+    return () => {
+      participant.off('isSpeakingChanged', handleSpeaking);
+    };
+  }, [participant]);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+
+    const attachActiveTrack = () => {
+      const pub = participant.getTrackPublication(Track.Source.Camera);
+      if (pub?.track && videoRef.current) {
+        pub.track.attach(videoRef.current);
+        return true;
+      }
+      return false;
+    };
+
+    const attached = attachActiveTrack();
+    let intervalId: any;
+    if (!attached && isCamOn) {
+      intervalId = setInterval(() => {
+        if (attachActiveTrack()) {
+          clearInterval(intervalId);
+        }
+      }, 100);
+    }
 
     const handler = () => {
-      const p = participant.getTrackPublication(Track.Source.Camera);
-      if (p?.track && videoRef.current) p.track.attach(videoRef.current);
+      attachActiveTrack();
     };
+
     participant.on('trackSubscribed', handler);
     participant.on('localTrackPublished', handler);
     participant.on('trackPublished', handler);
 
     return () => {
+      if (intervalId) clearInterval(intervalId);
       participant.off('trackSubscribed', handler);
       participant.off('localTrackPublished', handler);
       participant.off('trackPublished', handler);
@@ -111,87 +189,72 @@ function DraggableCircleVideo({
     };
   }, [participant, isCamOn]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).tagName === 'INPUT') return;
-
-    e.preventDefault();
-    setIsDragging(true);
-
-    const startX = e.clientX - position.x;
-    const startY = e.clientY - position.y;
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const newX = moveEvent.clientX - startX;
-      const newY = moveEvent.clientY - startY;
-      setPosition({ x: newX, y: newY });
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
   return (
-    <div
-      ref={containerRef}
-      onMouseDown={handleMouseDown}
-      onMouseEnter={() => setShowControls(true)}
-      onMouseLeave={() => setShowControls(false)}
-      style={{
-        transform: `translate(${position.x}px, ${position.y}px)`,
-        width: `${size}px`,
-        height: `${size}px`,
-        cursor: isDragging ? 'grabbing' : 'grab',
-      }}
-      className="absolute bottom-4 right-4 z-50 flex items-center justify-center transition-shadow duration-200"
-    >
-      {/* Video element container */}
-      <div
-        style={{ width: `${size}px`, height: `${size}px` }}
-        className="w-full h-full relative rounded-full overflow-hidden border-2 border-indigo-500 shadow-2xl bg-slate-900"
-      >
-        <video ref={videoRef} autoPlay muted={isLocal} playsInline className="w-full h-full object-cover" />
-        {!isCamOn && (
-          <div className="absolute inset-0 bg-slate-800 flex items-center justify-center">
-            <span className="text-white font-bold text-lg">
-              {(label || participant?.name || '?').charAt(0).toUpperCase()}
+    <div className={`relative rounded-2xl overflow-hidden bg-slate-900 border transition-all duration-300 ${fillHeight ? 'w-full h-full' : 'aspect-video'} shadow-lg group ${speaking ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-emerald-500/10' : 'border-slate-800 hover:border-slate-700'
+      }`}>
+      <video ref={videoRef} autoPlay muted={isLocal} playsInline className="w-full h-full object-cover" />
+
+      {!isCamOn && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950">
+          <div className={`${isCompact ? 'w-8 h-8 md:w-10 md:h-10' : 'w-16 h-16 md:w-20 md:h-20'} rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-105`}>
+            <span className={`${isCompact ? 'text-xs md:text-sm' : 'text-2xl md:text-3xl'} font-bold text-indigo-300`}>
+              {(participant.name || participant.identity || '?').charAt(0).toUpperCase()}
             </span>
           </div>
-        )}
-        {label && (
-          <div className="absolute bottom-1 left-0 right-0 text-center">
-            <span className="text-[10px] text-white/80 bg-black/50 px-1.5 rounded-full">{label}</span>
-          </div>
+        </div>
+      )}
+
+      {/* Top Left: Compact Microphone status icon */}
+      <div className={`absolute top-1.5 left-1.5 z-10 flex items-center justify-center bg-black/60 backdrop-blur-md ${isCompact ? 'w-5 h-5' : 'w-6 h-6'} rounded-full border border-white/10 shadow-md`}>
+        {isMicOn ? (
+          <svg className={`text-emerald-400 ${isCompact ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'}`} viewBox="0 0 20 20" fill="currentColor">
+            <path d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4z" />
+            <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5H10.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
+          </svg>
+        ) : (
+          <svg className={`text-red-400 ${isCompact ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+          </svg>
         )}
       </div>
 
-      {/* Hover resize controls */}
-      {showControls && (
-        <div
-          onMouseDown={(e) => e.stopPropagation()}
-          className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900/90 border border-slate-800 text-xs px-2 py-1.5 rounded-lg flex items-center gap-2 shadow-xl backdrop-blur-sm pointer-events-auto"
+      {/* Bottom Left: Unified compact name & role overlay */}
+      <div className={`absolute ${isCompact ? 'bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-lg' : 'bottom-2.5 left-2.5 px-2.5 py-1 rounded-xl'} z-10 bg-black/60 backdrop-blur-md border border-white/10 flex items-center gap-1 shadow-md max-w-[calc(100%-20px)]`}>
+        <span className={`text-white font-medium truncate ${isCompact ? 'text-[9px]' : 'text-[11px]'}`}>
+          {participant.name || participant.identity}
+          {isMentorTile && <span className="text-indigo-300 font-semibold ml-1 text-[8px] uppercase tracking-wider whitespace-nowrap">(Mentor)</span>}
+          {isLocal && !isMentorTile && <span className="text-slate-400 ml-1 text-[8px] whitespace-nowrap">(You)</span>}
+        </span>
+        {speaking && (
+          <span className="flex items-center gap-0.5 h-3">
+            <span className="w-0.5 bg-emerald-400 rounded-full animate-bounce h-2" style={{ animationDelay: '0ms' }} />
+            <span className="w-0.5 bg-emerald-400 rounded-full animate-bounce h-3" style={{ animationDelay: '150ms' }} />
+          </span>
+        )}
+      </div>
+
+      {/* Top Right: Mute button (mentor only) */}
+      {!isLocal && onForceMute && isMicOn && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onForceMute(participant.identity);
+          }}
+          className="absolute top-2.5 right-2.5 z-10 p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/45 border border-red-500/35 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-md"
+          title="Force mute student"
         >
-          <span className="text-slate-400">Size:</span>
-          <input
-            type="range"
-            min="64"
-            max="256"
-            value={size}
-            onChange={(e) => setSize(parseInt(e.target.value))}
-            className="w-20 accent-indigo-500"
-          />
-        </div>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+          </svg>
+        </button>
       )}
     </div>
   );
 }
 
-// ── Large main stage video ──────────────────────────────────────────────────
+// ── Large Main Stage Component ───────────────────────────────────────────────
 function MainVideo({
   participant,
   isLocal,
@@ -204,7 +267,6 @@ function MainVideo({
   useScreen?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-
   const isCamOn = useScreen
     ? !!participant?.getTrackPublication(Track.Source.ScreenShare)?.track
     : participant?.isCameraEnabled;
@@ -212,18 +274,36 @@ function MainVideo({
   useEffect(() => {
     if (!participant || !videoRef.current) return;
     const source = useScreen ? Track.Source.ScreenShare : Track.Source.Camera;
-    const pub = participant.getTrackPublication(source);
-    if (pub?.track) pub.track.attach(videoRef.current);
+
+    const attachActiveTrack = () => {
+      const pub = participant.getTrackPublication(source);
+      if (pub?.track && videoRef.current) {
+        pub.track.attach(videoRef.current);
+        return true;
+      }
+      return false;
+    };
+
+    const attached = attachActiveTrack();
+    let intervalId: any;
+    if (!attached && isCamOn) {
+      intervalId = setInterval(() => {
+        if (attachActiveTrack()) {
+          clearInterval(intervalId);
+        }
+      }, 100);
+    }
 
     const handler = () => {
-      const p = participant.getTrackPublication(source);
-      if (p?.track && videoRef.current) p.track.attach(videoRef.current);
+      attachActiveTrack();
     };
+
     participant.on('trackSubscribed', handler);
     participant.on('localTrackPublished', handler);
     participant.on('trackPublished', handler);
 
     return () => {
+      if (intervalId) clearInterval(intervalId);
       participant.off('trackSubscribed', handler);
       participant.off('localTrackPublished', handler);
       participant.off('trackPublished', handler);
@@ -233,33 +313,34 @@ function MainVideo({
   }, [participant, useScreen, isCamOn]);
 
   return (
-    <div className="relative w-full h-full bg-slate-950 rounded-2xl overflow-hidden">
+    <div className="relative w-full h-full bg-slate-950 rounded-2xl overflow-hidden border border-slate-900 shadow-xl flex items-center justify-center">
       <video ref={videoRef} autoPlay muted={isLocal} playsInline className="w-full h-full object-contain" />
       {!isCamOn && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950">
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500/30 to-violet-500/30 border border-indigo-500/40 flex items-center justify-center mb-3">
-            <span className="text-4xl font-bold text-indigo-400">
+          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/35 flex items-center justify-center mb-4 shadow-lg">
+            <span className="text-4xl font-bold text-indigo-300">
               {(label || participant?.name || '?').charAt(0).toUpperCase()}
             </span>
           </div>
-          <span className="text-slate-400 text-sm">{useScreen ? 'Screen share stopped' : 'Camera off'}</span>
+          <span className="text-slate-400 text-sm font-medium">{useScreen ? 'Screen share stopped' : 'Camera off'}</span>
         </div>
       )}
-      {/* Label bar */}
-      <div className="absolute bottom-0 left-0 right-0 px-4 py-2 bg-gradient-to-t from-black/70 to-transparent flex items-center justify-between">
+
+      {/* Overlay label bar */}
+      <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between z-10">
         <span className="text-white text-sm font-medium flex items-center gap-2">
           {label || participant?.name}
           {isLocal && <span className="text-indigo-300 text-xs">(You)</span>}
         </span>
         {participant && (
-          <div className={`w-5 h-5 rounded-full flex items-center justify-center ${participant.isMicrophoneEnabled ? 'bg-emerald-500/30' : 'bg-red-500/30'}`}>
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${participant.isMicrophoneEnabled ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-red-500/20 border border-red-500/30'}`}>
             {participant.isMicrophoneEnabled ? (
-              <svg className="w-3 h-3 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4z" />
                 <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5H10.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
               </svg>
             ) : (
-              <svg className="w-3 h-3 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-3.5 h-3.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
               </svg>
@@ -271,71 +352,7 @@ function MainVideo({
   );
 }
 
-// ── Student tile for mentor grid ────────────────────────────────────────────
-function StudentTile({
-  participant,
-  onForceMute,
-}: {
-  participant: RemoteParticipant;
-  onForceMute?: (identity: string) => void;
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const isCamOn = participant.isCameraEnabled;
-
-  useEffect(() => {
-    if (!videoRef.current) return;
-    const pub = participant.getTrackPublication(Track.Source.Camera);
-    if (pub?.track) pub.track.attach(videoRef.current);
-    const handler = () => {
-      const p = participant.getTrackPublication(Track.Source.Camera);
-      if (p?.track && videoRef.current) p.track.attach(videoRef.current);
-    };
-    participant.on('trackSubscribed', handler);
-    participant.on('trackPublished', handler);
-    return () => {
-      participant.off('trackSubscribed', handler);
-      participant.off('trackPublished', handler);
-      const p = participant.getTrackPublication(Track.Source.Camera);
-      if (p?.track && videoRef.current) p.track.detach(videoRef.current);
-    };
-  }, [participant, isCamOn]);
-
-  return (
-    <div className="relative rounded-xl overflow-hidden bg-slate-900 border border-slate-800 aspect-video group">
-      <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-      {!participant.isCameraEnabled && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
-          <div className="w-12 h-12 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
-            <span className="text-indigo-400 font-bold">{participant.name?.charAt(0).toUpperCase()}</span>
-          </div>
-        </div>
-      )}
-      <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/70 to-transparent flex items-center justify-between">
-        <span className="text-white text-xs font-medium truncate max-w-[70%]">{participant.name || participant.identity}</span>
-        <div className="flex items-center gap-1">
-          {/* Mic status dot */}
-          <span className={`w-1.5 h-1.5 rounded-full ${participant.isMicrophoneEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
-          {/* Force mute button (mentor only) */}
-          {participant.isMicrophoneEnabled && onForceMute && (
-            <button
-              onClick={() => onForceMute(participant.identity)}
-              className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-opacity"
-              title="Force mute"
-            >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-              </svg>
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Raised Hand Queue (Mentor panel) ────────────────────────────────────────
+// ── Raised Hand Queue (Mentor Panel Component) ───────────────────────────────
 function HandRaiseQueue({
   hands,
   onApprove,
@@ -357,14 +374,14 @@ function HandRaiseQueue({
   }
 
   return (
-    <div className="space-y-2 p-2">
+    <div className="space-y-2 p-3">
       {hands.map((h) => (
-        <div key={h.userId} className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2.5 animate-fade-in">
-          <div className="flex items-center gap-2">
+        <div key={h.userId} className="flex items-center justify-between bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2.5 animate-fade-in">
+          <div className="flex items-center gap-2.5">
             <span className="text-lg">✋</span>
             <div>
               <p className="text-sm font-medium text-white">{h.userName}</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-[10px] text-slate-500">
                 {new Date(h.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
@@ -372,13 +389,13 @@ function HandRaiseQueue({
           <div className="flex gap-1.5">
             <button
               onClick={() => onApprove(h.userId)}
-              className="bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 text-xs px-2.5 py-1 rounded-lg transition-all"
+              className="bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-400 text-xs px-2.5 py-1.5 rounded-lg transition-all"
             >
               ✓ Allow
             </button>
             <button
               onClick={() => onDeny(h.userId)}
-              className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs px-2.5 py-1 rounded-lg transition-all"
+              className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs px-2.5 py-1.5 rounded-lg transition-all"
             >
               ✗ Deny
             </button>
@@ -389,7 +406,18 @@ function HandRaiseQueue({
   );
 }
 
-// ── Main LiveSession Component ──────────────────────────────────────────────
+// ── Tab Button Utility ───────────────────────────────────────────────────────
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick}
+      className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1 transition-all duration-200 ${active ? 'text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/10'
+        }`}>
+      {children}
+    </button>
+  );
+}
+
+// ── MAIN LIVESESSION COMPONENT ───────────────────────────────────────────────
 export default function LiveSession() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -397,9 +425,29 @@ export default function LiveSession() {
   const { user } = useAppSelector((s) => s.auth);
   const isMentor = user?.role === 'MENTOR' || user?.role === 'ADMIN';
 
-  const [session, setSession] = useState<{ id: string; title: string; status: string } | null>(null);
+  const [session, setSession] = useState<{ id: string; title: string; description?: string | null; status: string; startedAt?: string | null; scheduledAt?: string | null; livekitRoom?: string | null } | null>(null);
   const [sidePanel, setSidePanel] = useState<'attendance' | 'hands' | 'chat'>('chat');
-  const [showStudentChat, setShowStudentChat] = useState(true);
+  const [isSidePanelOpen, setIsSidePanelOpen] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<'grid' | 'speaker'>('grid');
+
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showLeaveConfirmModal, setShowLeaveConfirmModal] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState('00:00');
+  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const ITEMS_PER_PAGE = isMobile ? 3 : 8;
+
   const [onlineCount, setOnlineCount] = useState(0);
   const [notifications, setNotifications] = useState<{ id: number; text: string; type: 'info' | 'warn' | 'success' }[]>([]);
   const [connectError, setConnectError] = useState('');
@@ -411,6 +459,54 @@ export default function LiveSession() {
   const [isUnmuted, setIsUnmuted] = useState(false); // student approved to speak
 
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const livekit = useLiveKit();
+  const isConnected = livekit.connectionState === ConnectionState.Connected;
+
+  // Recording
+  const recording = useRecording({
+    sessionId: sessionId || '',
+    room: livekit.room,
+    onUploadComplete: (url) => addNotif(url ? '✅ Recording saved to storage' : '✅ Recording downloaded', 'success'),
+    onError: (msg) => addNotif(msg, 'warn'),
+  });
+
+  const notifId = useRef(0);
+
+  // Sync elapsed timer
+  useEffect(() => {
+    if (session?.startedAt) {
+      setSessionStartTime(new Date(session.startedAt).getTime());
+    } else if (isConnected && !sessionStartTime) {
+      setSessionStartTime(Date.now());
+    }
+  }, [session?.startedAt, isConnected]);
+
+  useEffect(() => {
+    if (!sessionStartTime) return;
+
+    const updateTimer = () => {
+      const diff = Date.now() - sessionStartTime;
+      if (diff < 0) {
+        setElapsedTime('00:00');
+        return;
+      }
+      const secs = Math.floor(diff / 1000);
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = secs % 60;
+      const pad = (n: number) => String(n).padStart(2, '0');
+      if (h > 0) {
+        setElapsedTime(`${pad(h)}:${pad(m)}:${pad(s)}`);
+      } else {
+        setElapsedTime(`${pad(m)}:${pad(s)}`);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [sessionStartTime]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -436,19 +532,6 @@ export default function LiveSession() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  const livekit = useLiveKit();
-  const isConnected = livekit.connectionState === ConnectionState.Connected;
-
-  // Recording
-  const recording = useRecording({
-    sessionId: sessionId || '',
-    room: livekit.room,
-    onUploadComplete: (url) => addNotif(url ? '✅ Recording saved to storage' : '✅ Recording downloaded', 'success'),
-    onError: (msg) => addNotif(msg, 'warn'),
-  });
-
-  const notifId = useRef(0);
-
   // Helper to check if participant is mentor using role metadata
   const isParticipantMentor = (p: Participant | null) => {
     if (!p) return false;
@@ -464,20 +547,16 @@ export default function LiveSession() {
   const mentorParticipant = isMentor
     ? livekit.localParticipant
     : (livekit.remoteParticipants.find(p => isParticipantMentor(p)) ??
-       livekit.remoteParticipants.find(p => p.name && p.name !== user?.name) ??
-       livekit.remoteParticipants[0] ??
-       null);
+      livekit.remoteParticipants.find(p => p.name && p.name !== user?.name) ??
+      livekit.remoteParticipants[0] ??
+      null);
 
   // Find if anyone (including local or remote) is sharing screen
   const screenShareParticipant = (() => {
     if (!livekit.room) return null;
-    
-    // Check local participant first
     if (livekit.room.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track) {
       return livekit.room.localParticipant;
     }
-    
-    // Check remote participants
     for (const p of livekit.remoteParticipants) {
       if (p.getTrackPublication(Track.Source.ScreenShare)?.track) {
         return p;
@@ -511,12 +590,12 @@ export default function LiveSession() {
           return [...prev, e];
         });
         setSidePanel('hands');
+        setIsSidePanelOpen(true);
         addNotif(`✋ ${e.userName} raised their hand`, 'warn');
       }
     },
     onHandLowered: (userId) => {
       setRaisedHands(prev => prev.filter(h => h.userId !== userId));
-      // If it was this user lowering
       if (userId === user?.id) setIsHandRaised(false);
     },
     onUnmuteApproved: async (userId) => {
@@ -524,7 +603,7 @@ export default function LiveSession() {
         setIsUnmuted(true);
         setIsHandRaised(false);
         addNotif('✅ Mentor approved! You can now speak', 'success');
-        await livekit.setMicEnabled(true); // explicitly enable, not toggle
+        await livekit.setMicEnabled(true);
       }
     },
     onUnmuteDenied: (userId) => {
@@ -537,12 +616,11 @@ export default function LiveSession() {
       if (userId === user?.id) {
         setIsUnmuted(false);
         setIsHandRaised(false);
-        await livekit.setMicEnabled(false); // explicitly disable, not toggle
+        await livekit.setMicEnabled(false);
         addNotif('You have been muted by the mentor', 'warn');
       }
     },
     onSessionEnded: async () => {
-      // Received by ALL users (mentor + students) when mentor ends the session
       await livekit.disconnect();
       if (!isMentor) {
         addNotif('The session has ended', 'warn');
@@ -598,12 +676,11 @@ export default function LiveSession() {
   }, [socket]);
 
   const handleEndSession = async () => {
-    if (!sessionId || !confirm('End this session for everyone?')) return;
+    if (!sessionId) return;
     setSessionEnding(true);
     try {
-      const { endSession } = await import('../store/slices/sessionSlice');
       await dispatch(endSession(sessionId)).unwrap();
-      socket.broadcastSessionEnd(); // notify all students in real-time
+      socket.broadcastSessionEnd();
       await livekit.disconnect();
       navigate('/mentor');
     } catch { setSessionEnding(false); }
@@ -612,6 +689,15 @@ export default function LiveSession() {
   const handleLeave = async () => {
     await livekit.disconnect();
     navigate(isMentor ? '/mentor' : '/student');
+  };
+
+  const toggleSidePanel = (panel: 'chat' | 'attendance' | 'hands') => {
+    if (sidePanel === panel && isSidePanelOpen) {
+      setIsSidePanelOpen(false);
+    } else {
+      setSidePanel(panel);
+      setIsSidePanelOpen(true);
+    }
   };
 
   if (connectError) {
@@ -639,444 +725,622 @@ export default function LiveSession() {
     [ConnectionState.SignalReconnecting]: 'Reconnecting...',
   };
 
-  return (
-    <div className="h-screen bg-slate-950 flex flex-col overflow-hidden">
-      {/* ── Top Bar ─────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 border-b border-slate-800 bg-slate-900/90 backdrop-blur-xl px-4 py-2.5 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <button onClick={handleLeave} className="text-slate-400 hover:text-white p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-          <div className="min-w-0">
-            <h1 className="text-white font-semibold text-sm truncate">{session?.title}</h1>
-            <div className="flex items-center gap-2">
-              <span className={`text-xs ${isConnected ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {connLabel[livekit.connectionState]}
-              </span>
-              {isConnected && <span className="text-slate-500 text-xs">· {onlineCount} online</span>}
-            </div>
+  const participants = [
+    ...(livekit.localParticipant ? [livekit.localParticipant] : []),
+    ...livekit.remoteParticipants
+  ];
+
+  const totalPages = Math.ceil(participants.length / ITEMS_PER_PAGE);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [participants.length, totalPages, currentPage]);
+
+  // Render the central video content area
+  const renderCentralView = () => {
+    const showScreenShare = isScreenSharing && screenShareParticipant;
+
+    if (showScreenShare) {
+      return (
+        <div className="w-full h-full flex flex-col gap-3">
+          <div className="flex-1 min-h-0 relative">
+            <MainVideo
+              participant={screenShareParticipant}
+              isLocal={screenShareParticipant === livekit.localParticipant}
+              useScreen
+              label={screenShareParticipant === livekit.localParticipant ? 'Your Screen' : `${screenShareParticipant.name || 'Participant'}'s Screen`}
+            />
           </div>
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center gap-2">
-          {isMentor ? (
-            <>
-              {/* Mic */}
-              <button onClick={livekit.toggleMic} title={livekit.isMicEnabled ? 'Mute' : 'Unmute'}
-                className={`p-2 rounded-xl border transition-all ${livekit.isMicEnabled ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-red-500/20 border-red-500/40 text-red-400'}`}>
-                <MicIcon muted={!livekit.isMicEnabled} />
-              </button>
-              {/* AI Noise Cancellation */}
-              <button onClick={() => livekit.setNoiseCancellationEnabled(!livekit.isNoiseCancellationEnabled)}
-                title={livekit.isNoiseCancellationEnabled ? 'Disable AI Noise Cancellation' : 'Enable AI Noise Cancellation'}
-                className={`p-2 rounded-xl border transition-all ${livekit.isNoiseCancellationEnabled ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}>
-                <SparklesIcon active={livekit.isNoiseCancellationEnabled} />
-              </button>
-              {/* Camera */}
-              <button onClick={livekit.toggleCamera} title={livekit.isCameraEnabled ? 'Stop Camera' : 'Start Camera'}
-                className={`p-2 rounded-xl border transition-all ${livekit.isCameraEnabled ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-red-500/20 border-red-500/40 text-red-400'}`}>
-                <CamIcon off={!livekit.isCameraEnabled} />
-              </button>
-              {/* Screen share */}
-              <button onClick={livekit.toggleScreenShare} title="Screen Share"
-                className={`p-2 rounded-xl border transition-all hidden sm:flex ${livekit.isScreenSharing ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                <ScreenIcon />
-              </button>
-              {/* Record */}
-              <button
-                onClick={() => recording.isRecording ? recording.stop() : recording.start()}
-                disabled={recording.isUploading}
-                title={recording.isRecording ? 'Stop Recording' : 'Start Recording'}
-                className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border transition-all hidden sm:flex ${
-                  recording.isRecording
-                    ? 'bg-red-500/20 border-red-500/40 text-red-400 animate-pulse'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-red-400 hover:border-red-500/40'
-                }`}>
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${recording.isRecording ? 'bg-red-500' : 'bg-slate-500'}`} />
-                <span>{recording.isUploading ? 'Saving...' : recording.isRecording ? 'Stop REC' : 'REC'}</span>
-              </button>
-              {/* End session */}
-              <button onClick={handleEndSession} disabled={sessionEnding}
-                className="flex items-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 text-xs font-semibold px-3 py-2 rounded-xl transition-all">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-                </svg>
-                <span className="hidden sm:inline">End</span>
-              </button>
-            </>
-          ) : (
-            <>
-              {/* Student: raise hand */}
-              <button onClick={handleRaiseHand}
-                className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border transition-all ${
-                  isHandRaised
-                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-400 animate-pulse'
-                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-amber-500/40 hover:text-amber-400'
-                }`}>
-                <span className="text-base">✋</span>
-                <span className="hidden sm:inline">{isHandRaised ? 'Lower Hand' : 'Raise Hand'}</span>
-              </button>
-              {/* Student: mic (only if approved) */}
-              <button onClick={handleStudentMuteToggle}
-                className={`p-2 rounded-xl border transition-all ${
-                  !isUnmuted
-                    ? 'bg-slate-800/50 border-slate-800 text-slate-600 cursor-not-allowed'
-                    : livekit.isMicEnabled
-                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                      : 'bg-red-500/20 border-red-500/40 text-red-400'
-                }`}
-                title={!isUnmuted ? 'Raise hand to speak' : livekit.isMicEnabled ? 'Mute' : 'Unmute'}>
-                <MicIcon muted={!livekit.isMicEnabled || !isUnmuted} />
-              </button>
-              {/* Student: AI Noise Cancellation (only if unmuted/speaking) */}
-              {isUnmuted && (
-                <button onClick={() => livekit.setNoiseCancellationEnabled(!livekit.isNoiseCancellationEnabled)}
-                  title={livekit.isNoiseCancellationEnabled ? 'Disable AI Noise Cancellation' : 'Enable AI Noise Cancellation'}
-                  className={`p-2 rounded-xl border transition-all ${livekit.isNoiseCancellationEnabled ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}>
-                  <SparklesIcon active={livekit.isNoiseCancellationEnabled} />
-                </button>
-              )}
-              {/* Student: camera */}
-              <button onClick={livekit.toggleCamera} title={livekit.isCameraEnabled ? 'Stop Camera' : 'Start Camera'}
-                className={`p-2 rounded-xl border transition-all ${livekit.isCameraEnabled ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-red-500/20 border-red-500/40 text-red-400'}`}>
-                <CamIcon off={!livekit.isCameraEnabled} />
-              </button>
-              {/* Student: screen share */}
-              <button onClick={livekit.toggleScreenShare} title="Screen Share"
-                className={`p-2 rounded-xl border transition-all hidden sm:flex ${livekit.isScreenSharing ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                <ScreenIcon />
-              </button>
-              {/* Student: Toggle Chat */}
-              <button onClick={() => setShowStudentChat(prev => !prev)} title="Toggle Chat"
-                className={`p-2 rounded-xl border transition-all ${showStudentChat ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
-                <ChatIcon />
-              </button>
-              {/* Leave */}
-              <button onClick={handleLeave} className="text-xs font-semibold px-3 py-2 rounded-xl border border-slate-700 text-slate-400 hover:text-red-400 hover:border-red-500/40 transition-all">
-                Leave
-              </button>
-            </>
-          )}
-
-          {/* Fullscreen Toggle */}
-          <button
-            onClick={toggleFullscreen}
-            title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-            className="p-2 rounded-xl border transition-all bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700"
-          >
-            {isFullscreen ? (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 14h6v6m0-6l-7 7m16-7h-6v6m0-6l7 7M9 9V3M9 9H3M9 9L2 2" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Body ────────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden flex">
-        {/* Video Area */}
-        <div className="flex-1 relative overflow-hidden p-3">
-          {!isConnected ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-12 h-12 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-slate-400 text-sm">{connLabel[livekit.connectionState]}</p>
+          {/* Scrollable list of active cameras at the bottom */}
+          <div className="h-28 flex-shrink-0 flex gap-3 overflow-x-auto pb-1">
+            {participants.map(p => (
+              <div key={p.sid || p.identity} className="w-48 flex-shrink-0">
+                <ParticipantTile
+                  participant={p}
+                  isLocal={p === livekit.localParticipant}
+                  isMentorTile={isParticipantMentor(p)}
+                  onForceMute={isMentor ? handleForceMute : undefined}
+                />
               </div>
-            </div>
-          ) : isMentor ? (
-            /* ─── MENTOR LAYOUT ─────────────────────────────────────────── */
-            <MentorLayout
-              localParticipant={livekit.localParticipant}
-              remoteParticipants={livekit.remoteParticipants}
-              isScreenSharing={isScreenSharing}
-              screenShareParticipant={screenShareParticipant}
-              onForceMute={handleForceMute}
-            />
-          ) : (
-            /* ─── STUDENT LAYOUT ────────────────────────────────────────── */
-            <StudentLayout
-              localParticipant={livekit.localParticipant}
-              mentorParticipant={mentorParticipant as RemoteParticipant | null}
-              isScreenSharing={isScreenSharing}
-              screenShareParticipant={screenShareParticipant}
-              userName={user?.name || 'You'}
-            />
-          )}
-        </div>
-
-        {/* Side Panel */}
-        {isMentor ? (
-          <div className="w-72 flex-shrink-0 border-l border-slate-800 flex flex-col bg-slate-900/40">
-            {/* Tabs */}
-            <div className="flex border-b border-slate-800 flex-shrink-0">
-              <TabButton active={sidePanel === 'hands'} onClick={() => setSidePanel('hands')}>
-                Hands {raisedHands.length > 0 && (
-                  <span className="ml-1 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                    {raisedHands.length}
-                  </span>
-                )}
-              </TabButton>
-              <TabButton active={sidePanel === 'chat'} onClick={() => setSidePanel('chat')}>
-                Chat
-              </TabButton>
-              <TabButton active={sidePanel === 'attendance'} onClick={() => setSidePanel('attendance')}>
-                People
-              </TabButton>
-            </div>
-
-            {/* Panel Content */}
-            <div className="flex-1 overflow-hidden">
-              {sidePanel === 'hands' && (
-                <HandRaiseQueue
-                  hands={raisedHands}
-                  onApprove={socket.approveUnmute}
-                  onDeny={socket.denyUnmute}
-                />
-              )}
-              {sidePanel === 'chat' && (
-                <ChatPanel onSendMessage={socket.sendChatMessage} />
-              )}
-              {sidePanel === 'attendance' && (
-                <AttendanceList
-                  sessionId={sessionId!}
-                  onlineCount={onlineCount}
-                  remoteParticipants={livekit.remoteParticipants}
-                  onForceMute={socket.forceMute}
-                  onApproveUnmute={socket.approveUnmute}
-                />
-              )}
-            </div>
+            ))}
           </div>
-        ) : (
-          /* Student Side Panel (Collapsible Chat) */
-          showStudentChat && (
-            <div className="w-72 flex-shrink-0 border-l border-slate-800 flex flex-col bg-slate-900/40 p-2">
-              <ChatPanel onSendMessage={socket.sendChatMessage} />
-            </div>
-          )
-        )}
-      </div>
-
-      {/* ── Toast Notifications ──────────────────────────────────────────── */}
-      <div className="fixed bottom-4 left-4 space-y-2 z-50 pointer-events-none max-w-xs">
-        {notifications.map((n) => (
-          <div key={n.id}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm shadow-xl animate-slide-in-right backdrop-blur-sm ${
-              n.type === 'success' ? 'bg-emerald-900/80 border border-emerald-500/40 text-emerald-200' :
-              n.type === 'warn'    ? 'bg-amber-900/80 border border-amber-500/40 text-amber-200' :
-                                    'bg-slate-800/90 border border-slate-700/60 text-slate-200'
-            }`}>
-            {n.text}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Mentor Layout Component ─────────────────────────────────────────────────
-function MentorLayout({
-  localParticipant,
-  remoteParticipants,
-  isScreenSharing,
-  screenShareParticipant,
-  onForceMute,
-}: {
-  localParticipant: LocalParticipant | null;
-  remoteParticipants: RemoteParticipant[];
-  isScreenSharing: boolean;
-  screenShareParticipant: Participant | null;
-  onForceMute: (id: string) => void;
-}) {
-  return (
-    <div className="relative w-full h-full">
-      {/* Main area: screen share or student grid */}
-      {isScreenSharing && screenShareParticipant ? (
-        // Screen share is main stage
-        <div className="w-full h-full">
-          <MainVideo
-            participant={screenShareParticipant}
-            isLocal={screenShareParticipant === localParticipant}
-            useScreen
-            label={screenShareParticipant === localParticipant ? 'Your Screen' : `${screenShareParticipant.name || 'Student'}'s Screen`}
-          />
         </div>
-      ) : (
-        // Student grid
-        <div className="w-full h-full overflow-y-auto">
-          {remoteParticipants.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500">
-              <svg className="w-12 h-12 mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <p className="text-sm">Waiting for students to join...</p>
-            </div>
-          ) : (
-            <div className={`grid gap-3 h-full content-start ${
-              remoteParticipants.length === 1 ? 'grid-cols-1' :
-              remoteParticipants.length <= 4 ? 'grid-cols-2' :
-              'grid-cols-3'
-            }`}>
-              {remoteParticipants.map(p => (
-                <StudentTile key={p.sid} participant={p} onForceMute={onForceMute} />
+      );
+    }
+
+    if (layoutMode === 'speaker') {
+      const activeSpeaker = livekit.remoteParticipants.find(p => p.isSpeaking)
+        || (livekit.localParticipant?.isSpeaking ? livekit.localParticipant : null)
+        || mentorParticipant
+        || livekit.localParticipant;
+
+      if (!activeSpeaker) {
+        return (
+          <div className="flex flex-col items-center justify-center h-full text-slate-500">
+            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm mt-3">Connecting video...</p>
+          </div>
+        );
+      }
+
+      const otherParticipants = participants.filter(p => p !== activeSpeaker);
+
+      return (
+        <div className="w-full h-full flex flex-col gap-3">
+          <div className="flex-1 min-h-0 relative">
+            <MainVideo
+              participant={activeSpeaker}
+              isLocal={activeSpeaker === livekit.localParticipant}
+              label={activeSpeaker === livekit.localParticipant ? 'You' : activeSpeaker.name || activeSpeaker.identity}
+            />
+          </div>
+          {otherParticipants.length > 0 && (
+            <div className="h-28 flex-shrink-0 flex gap-3 overflow-x-auto pb-1">
+              {otherParticipants.map(p => (
+                <div key={p.sid || p.identity} className="w-48 flex-shrink-0">
+                  <ParticipantTile
+                    participant={p}
+                    isLocal={p === livekit.localParticipant}
+                    isMentorTile={isParticipantMentor(p)}
+                    onForceMute={isMentor ? handleForceMute : undefined}
+                  />
+                </div>
               ))}
             </div>
           )}
         </div>
-      )}
+      );
+    }
 
-      {/* Mentor self-cam: draggable & resizable circle */}
-      {localParticipant && (
-        <DraggableCircleVideo
-          participant={localParticipant}
-          isLocal
-          label="You"
-        />
-      )}
-    </div>
-  );
-}
+    // Grid Layout Mode
+    if (participants.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-slate-500">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-indigo-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-slate-400">Waiting for participants to connect...</p>
+        </div>
+      );
+    }
 
-// ── Student Layout Component ────────────────────────────────────────────────
-function StudentLayout({
-  localParticipant,
-  mentorParticipant,
-  isScreenSharing,
-  screenShareParticipant,
-  userName,
-}: {
-  localParticipant: LocalParticipant | null;
-  mentorParticipant: RemoteParticipant | null;
-  isScreenSharing: boolean;
-  screenShareParticipant: Participant | null;
-  userName: string;
-}) {
-  return (
-    <div className="relative w-full h-full">
-      {/* Main stage: active screen share or mentor camera */}
-      <div className="w-full h-full">
-        {screenShareParticipant ? (
-          <MainVideo
-            participant={screenShareParticipant}
-            isLocal={screenShareParticipant === localParticipant}
-            useScreen
-            label={screenShareParticipant === localParticipant ? 'Your Screen' : `${screenShareParticipant.name || 'Participant'}'s Screen`}
-          />
-        ) : mentorParticipant ? (
-          <MainVideo
-            participant={mentorParticipant}
-            useScreen={false}
-            label={mentorParticipant.name || 'Mentor'}
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-slate-500">
-            <div className="w-20 h-20 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center mb-4">
-              <svg className="w-10 h-10 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <p className="text-sm">Waiting for mentor to start broadcasting...</p>
+    const validPage = currentPage > totalPages ? Math.max(totalPages, 1) : currentPage;
+    const displayParticipants = isMobile
+      ? participants.slice(0, validPage * ITEMS_PER_PAGE)
+      : participants.slice((validPage - 1) * ITEMS_PER_PAGE, (validPage - 1) * ITEMS_PER_PAGE + ITEMS_PER_PAGE);
+
+    const gridColsClass =
+      isMobile ? 'grid-cols-1' :
+        displayParticipants.length === 1 ? 'grid-cols-1' :
+          displayParticipants.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+            displayParticipants.length === 3 ? 'grid-cols-1 sm:grid-cols-3' :
+              displayParticipants.length === 4 ? 'grid-cols-1 sm:grid-cols-2 sm:grid-rows-2' :
+                displayParticipants.length <= 6 ? 'grid-cols-1 sm:grid-cols-3 sm:grid-rows-2' :
+                  'grid-cols-1 sm:grid-cols-4 sm:grid-rows-2';
+
+    return (
+      <div className={`w-full h-full flex flex-col ${isMobile ? 'overflow-y-auto pr-1 pb-16 gap-4' : 'justify-between'}`}>
+        <div className={`grid gap-3 w-full ${isMobile ? 'flex-shrink-0' : 'flex-1'} ${gridColsClass}`}>
+          {displayParticipants.map((p) => (
+            <ParticipantTile
+              key={p.sid || p.identity}
+              participant={p}
+              isLocal={p === livekit.localParticipant}
+              isMentorTile={isParticipantMentor(p)}
+              onForceMute={isMentor ? handleForceMute : undefined}
+              isCompact={displayParticipants.length > 4}
+              fillHeight={!isMobile}
+            />
+          ))}
+        </div>
+
+        {participants.length > ITEMS_PER_PAGE && (
+          <div className="flex justify-center items-center gap-4 py-2 bg-slate-900/40 border border-slate-900/60 rounded-xl flex-shrink-0 px-4">
+            {validPage > 1 && (
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold border border-slate-700 text-white transition-all shadow-lg active:scale-95 duration-200"
+              >
+                View Less
+              </button>
+            )}
+            {validPage < totalPages && (
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                className="px-4 py-2 rounded-xl bg-indigo-650 hover:bg-indigo-600 text-xs font-semibold border border-indigo-500/30 text-white transition-all shadow-lg active:scale-95 duration-200"
+              >
+                View More
+              </button>
+            )}
           </div>
         )}
       </div>
+    );
+  };
 
-      {/* If screen sharing AND mentor cam is available, show mentor cam as extra PiP at bottom-right */}
-      {isScreenSharing && mentorParticipant && mentorParticipant.isCameraEnabled && (
-        <div className="absolute bottom-4 right-4 z-20">
-          <CircleVideo
-            participant={mentorParticipant}
-            label={mentorParticipant.name || 'Mentor'}
-            className="w-20 h-20 shadow-2xl ring-2 ring-violet-500/50"
-          />
+  return (
+    <div className="h-screen bg-slate-950 flex flex-col overflow-hidden text-white relative">
+      {/* ── Top Bar Redesign ────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 border-b border-slate-900 bg-slate-900/60 backdrop-blur-xl px-4 py-3 flex items-center justify-between gap-4 z-30">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Settings Button */}
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="text-slate-400 hover:text-white p-2 hover:bg-slate-800/80 rounded-xl transition-all duration-200"
+            title="Settings"
+          >
+            <SettingsIcon />
+          </button>
+
+          {/* Info Button */}
+          <button
+            onClick={() => setShowInfoModal(true)}
+            className="text-slate-400 hover:text-white p-2 hover:bg-slate-800/80 rounded-xl transition-all duration-200"
+            title="Session Info"
+          >
+            <InfoIcon />
+          </button>
+
+          {/* Layout Toggle */}
+          <button
+            onClick={() => setLayoutMode(prev => prev === 'grid' ? 'speaker' : 'grid')}
+            className={`p-2 rounded-xl transition-all duration-200 ${layoutMode === 'grid' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/80'}`}
+            title="Toggle grid layout"
+          >
+            <LayoutGridIcon />
+          </button>
+        </div>
+
+        {/* Live Timer Pill */}
+        <div className="flex items-center gap-2.5 bg-slate-955/85 border border-slate-850 px-3.5 py-1.5 rounded-full shadow-inner shadow-black/45">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="text-xs font-semibold text-emerald-400 font-mono tracking-wider">{elapsedTime}</span>
+        </div>
+
+        {/* End/Leave Call Button */}
+        <button
+          onClick={() => setShowLeaveConfirmModal(true)}
+          disabled={sessionEnding}
+          className="p-2.5 rounded-full bg-red-650 hover:bg-red-700 text-white shadow-lg shadow-red-900/20 active:scale-95 transition-all duration-200"
+          title={isMentor ? 'End or Leave Session' : 'Leave Session'}
+        >
+          <HangupIcon />
+        </button>
+      </div>
+
+      {/* ── Main Viewport Container ─────────────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden flex relative">
+
+        {/* Video stream viewport */}
+        <div className="flex-1 relative overflow-hidden p-4 pb-24">
+          {!isConnected ? (
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+              <div className="w-12 h-12 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-slate-400 text-sm font-medium">{connLabel[livekit.connectionState]}</p>
+            </div>
+          ) : (
+            renderCentralView()
+          )}
+        </div>
+
+        {/* Side Panel Drawer (Desktop inline / Mobile absolute overlay) */}
+        {isSidePanelOpen && (
+          <>
+            {/* Dark backdrop overlay on mobile only */}
+            <div
+              className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity"
+              onClick={() => setIsSidePanelOpen(false)}
+            />
+            <div className="fixed inset-y-0 right-0 w-80 lg:relative lg:w-72 flex-shrink-0 border-l border-slate-900 flex flex-col bg-slate-900/90 lg:bg-slate-900/40 z-50 shadow-2xl backdrop-blur-xl lg:backdrop-blur-none animate-slide-in-right">
+              {/* Header Tabs */}
+              <div className="flex border-b border-slate-900 flex-shrink-0 bg-slate-950/20">
+                {isMentor && (
+                  <TabButton active={sidePanel === 'hands'} onClick={() => setSidePanel('hands')}>
+                    Hands {raisedHands.length > 0 && (
+                      <span className="ml-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
+                        {raisedHands.length}
+                      </span>
+                    )}
+                  </TabButton>
+                )}
+                <TabButton active={sidePanel === 'chat'} onClick={() => setSidePanel('chat')}>
+                  Chat
+                </TabButton>
+                <TabButton active={sidePanel === 'attendance'} onClick={() => setSidePanel('attendance')}>
+                  People {isConnected && (
+                    <span className="text-[10px] text-slate-400 ml-1">({onlineCount})</span>
+                  )}
+                </TabButton>
+              </div>
+
+              {/* Panel Content */}
+              <div className="flex-1 overflow-hidden flex flex-col p-2 bg-slate-900/20">
+                {sidePanel === 'hands' && isMentor && (
+                  <HandRaiseQueue
+                    hands={raisedHands}
+                    onApprove={socket.approveUnmute}
+                    onDeny={socket.denyUnmute}
+                  />
+                )}
+                {sidePanel === 'chat' && (
+                  <ChatPanel onSendMessage={socket.sendChatMessage} />
+                )}
+                {sidePanel === 'attendance' && (
+                  <AttendanceList
+                    sessionId={sessionId!}
+                    onlineCount={onlineCount}
+                    remoteParticipants={livekit.remoteParticipants}
+                    onForceMute={socket.forceMute}
+                    onApproveUnmute={socket.approveUnmute}
+                  />
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Sticky Bottom Control Bar ────────────────────────────────────────── */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 w-[95%] sm:w-11/12 max-w-4xl bg-slate-900/90 backdrop-blur-md px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl border border-slate-800 shadow-2xl flex items-center justify-between gap-1.5 sm:gap-4">
+
+        {/* Left Side Buttons */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Info Button - Desktop Only */}
+          <button
+            onClick={() => setShowInfoModal(true)}
+            className="p-3 rounded-2xl border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800/80 active:scale-95 transition-all duration-200 hidden sm:flex"
+            title="Session Info"
+          >
+            <InfoIcon />
+          </button>
+
+          {/* Layout Quick-toggle - Desktop Only */}
+          <button
+            onClick={() => setLayoutMode(prev => prev === 'grid' ? 'speaker' : 'grid')}
+            className="p-3 rounded-2xl border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800/80 active:scale-95 transition-all duration-200 hidden sm:flex"
+            title="Switch Layout"
+          >
+            {layoutMode === 'grid' ? <SpeakerIcon /> : <LayoutGridIcon />}
+          </button>
+
+          {/* Mic Control */}
+          <button
+            onClick={isMentor ? livekit.toggleMic : handleStudentMuteToggle}
+            className={`p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border transition-all duration-200 active:scale-95 ${!isMentor && !isUnmuted
+                ? 'bg-slate-800/40 border-slate-850/50 text-slate-650 cursor-not-allowed'
+                : livekit.isMicEnabled
+                  ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750'
+                  : 'bg-red-500/20 border-red-500/35 text-red-400 hover:bg-red-500/30'
+              }`}
+            title={!isMentor && !isUnmuted ? 'Raise hand to request mic' : livekit.isMicEnabled ? 'Mute' : 'Unmute'}
+          >
+            <MicIcon muted={!livekit.isMicEnabled || (!isMentor && !isUnmuted)} />
+          </button>
+
+          {/* Camera Control */}
+          <button
+            onClick={livekit.toggleCamera}
+            className={`p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border transition-all duration-200 active:scale-95 ${livekit.isCameraEnabled
+                ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750'
+                : 'bg-red-500/20 border-red-500/35 text-red-400 hover:bg-red-500/30'
+              }`}
+            title={livekit.isCameraEnabled ? 'Stop Video' : 'Start Video'}
+          >
+            <CamIcon off={!livekit.isCameraEnabled} />
+          </button>
+
+          {/* Screen Share */}
+          <button
+            onClick={livekit.toggleScreenShare}
+            className={`p-3 rounded-2xl border transition-all duration-200 active:scale-95 hidden sm:flex ${livekit.isScreenSharing
+                ? 'bg-indigo-500/20 border-indigo-500/35 text-indigo-400 hover:bg-indigo-500/30'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-755'
+              }`}
+            title="Screen Share"
+          >
+            <ScreenIcon />
+          </button>
+        </div>
+
+        {/* Right Side Buttons */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* AI Noise Cancellation - Desktop Only */}
+          <button
+            onClick={() => livekit.setNoiseCancellationEnabled(!livekit.isNoiseCancellationEnabled)}
+            className={`p-3 rounded-2xl border transition-all duration-200 active:scale-95 hidden sm:flex ${livekit.isNoiseCancellationEnabled
+                ? 'bg-emerald-500/20 border-emerald-500/35 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)] hover:bg-emerald-500/30'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-755'
+              }`}
+            title={livekit.isNoiseCancellationEnabled ? 'Disable AI Noise Cancellation' : 'Enable AI Noise Cancellation'}
+          >
+            <SparklesIcon active={livekit.isNoiseCancellationEnabled} />
+          </button>
+
+          {/* Student: Raise hand button */}
+          {!isMentor && (
+            <button
+              onClick={handleRaiseHand}
+              className={`flex items-center justify-center gap-1.5 text-xs font-semibold px-2.5 py-2.5 sm:px-3.5 sm:py-3 rounded-xl sm:rounded-2xl border transition-all duration-200 active:scale-95 ${isHandRaised
+                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-400 animate-pulse'
+                  : 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750'
+                }`}
+              title={isHandRaised ? 'Lower Hand' : 'Raise Hand'}
+            >
+              <HandsIcon />
+              <span className="hidden md:inline">{isHandRaised ? 'Lower' : 'Speak'}</span>
+            </button>
+          )}
+
+          {/* Mentor: Recording toggle */}
+          {isMentor && (
+            <button
+              onClick={() => recording.isRecording ? recording.stop() : recording.start()}
+              disabled={recording.isUploading}
+              className={`flex items-center justify-center gap-1.5 text-xs font-semibold px-3.5 py-3 rounded-2xl border transition-all duration-200 active:scale-95 hidden sm:flex ${recording.isRecording
+                  ? 'bg-red-500/20 border-red-500/35 text-red-400 animate-pulse'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-red-400 hover:border-red-500/30'
+                }`}
+              title={recording.isRecording ? 'Stop Recording' : 'Start Recording'}
+            >
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${recording.isRecording ? 'bg-red-500' : 'bg-slate-500'}`} />
+              <span>{recording.isUploading ? 'Saving' : recording.isRecording ? 'REC' : 'Record'}</span>
+            </button>
+          )}
+
+          {/* Mentor: Hands queue toggle */}
+          {isMentor && (
+            <button
+              onClick={() => toggleSidePanel('hands')}
+              className={`p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border transition-all duration-200 active:scale-95 relative ${isSidePanelOpen && sidePanel === 'hands'
+                  ? 'bg-amber-500/20 border-amber-500/35 text-amber-400'
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-755'
+                }`}
+              title="Hands raised queue"
+            >
+              <HandsIcon />
+              {raisedHands.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-slate-900 animate-bounce">
+                  {raisedHands.length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* People list toggle */}
+          <button
+            onClick={() => toggleSidePanel('attendance')}
+            className={`p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border transition-all duration-200 active:scale-95 ${isSidePanelOpen && sidePanel === 'attendance'
+                ? 'bg-indigo-500/20 border-indigo-500/35 text-indigo-400'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-750'
+              }`}
+            title="People List"
+          >
+            <PeopleIcon />
+          </button>
+
+          {/* Chat toggle */}
+          <button
+            onClick={() => toggleSidePanel('chat')}
+            className={`p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border transition-all duration-200 active:scale-95 relative ${isSidePanelOpen && sidePanel === 'chat'
+                ? 'bg-indigo-500/20 border-indigo-500/35 text-indigo-400'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-750'
+              }`}
+            title="Chat Panel"
+          >
+            <ChatIcon />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Notification Toasts ────────────────────────────────────────────── */}
+      <div className="fixed bottom-24 left-4 space-y-2 z-50 pointer-events-none max-w-xs">
+        {notifications.map((n) => (
+          <div key={n.id}
+            className={`flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm shadow-xl animate-slide-in-right backdrop-blur-md ${n.type === 'success' ? 'bg-emerald-955/85 border border-emerald-500/30 text-emerald-200' :
+                n.type === 'warn' ? 'bg-amber-955/85 border border-amber-500/30 text-amber-200' :
+                  'bg-slate-900/90 border border-slate-800 text-slate-200'
+              }`}>
+            {n.text}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Details Info Modal ────────────────────────────────────────────── */}
+      {showInfoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowInfoModal(false)} />
+          <div className="relative w-full max-w-md glass bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-2xl animate-scale-up text-white">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-lg font-bold text-white">Session Information</h3>
+              <button onClick={() => setShowInfoModal(false)} className="text-slate-450 hover:text-white">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div>
+                <span className="text-slate-450 text-xs font-semibold uppercase tracking-wider block">Session Title</span>
+                <span className="text-white text-base font-semibold">{session?.title || 'Unknown Title'}</span>
+              </div>
+
+              {session?.description && (
+                <div>
+                  <span className="text-slate-450 text-xs font-semibold uppercase tracking-wider block">Description</span>
+                  <p className="text-slate-300 mt-0.5 leading-relaxed">{session.description}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-slate-450 text-xs font-semibold uppercase tracking-wider block">Scheduled</span>
+                  <span className="text-slate-200 font-medium block mt-0.5">
+                    {session?.scheduledAt ? new Date(session.scheduledAt).toLocaleString() : 'N/A'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-450 text-xs font-semibold uppercase tracking-wider block">Status</span>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 mt-0.5 rounded-full text-xs font-semibold border ${session?.status === 'LIVE' ? 'bg-red-500/10 border-red-500/25 text-red-400' : 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+                    }`}>
+                    {session?.status || 'SCHEDULED'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-slate-450 text-xs font-semibold uppercase tracking-wider block">LiveKit Room</span>
+                <code className="text-indigo-300 bg-slate-955 px-2 py-1 rounded text-xs select-all break-all inline-block mt-0.5">
+                  {session?.livekitRoom || 'Loading...'}
+                </code>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Student self-cam: small circle, bottom-left (if screen sharing and mentor cam is in bottom-right) or bottom-right (otherwise) */}
-      {localParticipant && (
-        <div className={`absolute z-20 ${
-          isScreenSharing && mentorParticipant && mentorParticipant.isCameraEnabled
-            ? 'bottom-4 left-4'
-            : 'bottom-4 right-4'
-        }`}>
-          <CircleVideo
-            participant={localParticipant}
-            isLocal
-            label="You"
-            className="w-16 h-16 shadow-2xl ring-2 ring-indigo-500/40"
-          />
+      {/* ── Settings Modal ────────────────────────────────────────────────── */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowSettingsModal(false)} />
+          <div className="relative w-full max-w-md glass bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-2xl animate-scale-up text-white">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-lg font-bold text-white">Call Settings</h3>
+              <button onClick={() => setShowSettingsModal(false)} className="text-slate-450 hover:text-white">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div className="flex justify-between items-center py-2 border-b border-slate-800/80">
+                <div>
+                  <span className="font-semibold block text-white">AI Noise Cancellation</span>
+                  <span className="text-xs text-slate-450">Reduces background hums and noises</span>
+                </div>
+                <button
+                  onClick={() => livekit.setNoiseCancellationEnabled(!livekit.isNoiseCancellationEnabled)}
+                  className={`w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none flex items-center p-0.5 ${livekit.isNoiseCancellationEnabled ? 'bg-indigo-500' : 'bg-slate-700'
+                    }`}
+                >
+                  <span className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${livekit.isNoiseCancellationEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                </button>
+              </div>
+
+              <div className="flex justify-between items-center py-2 border-b border-slate-800/80">
+                <div>
+                  <span className="font-semibold block text-white">Fullscreen Mode</span>
+                  <span className="text-xs text-slate-450">Toggles room presentation size</span>
+                </div>
+                <button
+                  onClick={toggleFullscreen}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-750 text-white rounded-lg text-xs font-semibold transition-all"
+                >
+                  {isFullscreen ? 'Exit Full' : 'Enter Full'}
+                </button>
+              </div>
+
+              <div className="py-2">
+                <span className="text-xs text-slate-455 uppercase font-semibold tracking-wider block mb-1">Session Connection Details</span>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-850 space-y-1.5 text-xs text-slate-350 font-mono">
+                  <div>Connection: {livekit.connectionState}</div>
+                  <div>User Role: {user?.role || 'STUDENT'}</div>
+                  <div>Client ID: {user?.id || 'anonymous'}</div>
+                  <div>Room Name: {session?.livekitRoom || 'unspecified'}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── End/Leave Call Confirmation Modal ────────────────────────────── */}
+      {showLeaveConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowLeaveConfirmModal(false)} />
+          <div className="relative w-full max-w-md glass bg-slate-900/95 border border-slate-800 rounded-2xl p-6 shadow-2xl animate-scale-up text-white">
+            <h3 className="text-lg font-bold text-white mb-2">
+              {isMentor ? 'End or Leave Session' : 'Leave Session'}
+            </h3>
+            <p className="text-slate-300 text-sm mb-6 leading-relaxed">
+              {isMentor
+                ? 'Would you like to end the session for all participants, or just leave the session running?'
+                : 'Are you sure you want to leave the session? You can join back later if the session is still live.'}
+            </p>
+
+            <div className="flex flex-col gap-2">
+              {isMentor ? (
+                <>
+                  <button
+                    onClick={async () => {
+                      setShowLeaveConfirmModal(false);
+                      await handleEndSession();
+                    }}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl transition-all duration-200"
+                  >
+                    End Session for All
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setShowLeaveConfirmModal(false);
+                      await handleLeave();
+                    }}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-white font-semibold py-2.5 rounded-xl border border-slate-700 transition-all"
+                  >
+                    Just Leave Session
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={async () => {
+                    setShowLeaveConfirmModal(false);
+                    await handleLeave();
+                  }}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 rounded-xl transition-all duration-200"
+                >
+                  Leave Session
+                </button>
+              )}
+
+              <button
+                onClick={() => setShowLeaveConfirmModal(false)}
+                className="w-full bg-transparent hover:bg-white/5 text-slate-400 hover:text-white py-2.5 rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
-  );
-}
-
-// ── Small utility components ────────────────────────────────────────────────
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick}
-      className={`flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-1 transition-colors ${
-        active ? 'text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5' : 'text-slate-500 hover:text-slate-300'
-      }`}>
-      {children}
-    </button>
-  );
-}
-
-function MicIcon({ muted }: { muted: boolean }) {
-  return muted ? (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-    </svg>
-  ) : (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-    </svg>
-  );
-}
-
-function CamIcon({ off }: { off: boolean }) {
-  return off ? (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-  ) : (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-    </svg>
-  );
-}
-
-function ScreenIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-    </svg>
-  );
-}
-
-function SparklesIcon({ active }: { active: boolean }) {
-  return (
-    <svg className={`w-4 h-4 transition-colors ${active ? 'text-emerald-400' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-    </svg>
-  );
-}
-
-function ChatIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-    </svg>
   );
 }
